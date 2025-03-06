@@ -1,334 +1,267 @@
-
 import React, { useState, useEffect } from "react";
-import { useAuth } from "@/contexts/AuthContext";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Wifi, WifiOff, LockKeyhole, AlertCircle, RefreshCw, CheckCircle, Loader2 } from "lucide-react";
-import { getDeviceStatus, getWifiNetworks, setWifiCredentials } from "@/lib/firebase";
-import { useToast } from "@/hooks/use-toast";
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from "@/components/ui/table";
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Wifi, Signal, RefreshCw } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { getWifiNetworks, setWifiCredentials, getDeviceStatus } from "@/lib/firebase";
 
 const Connectivity = () => {
   const { currentUser } = useAuth();
-  const { toast } = useToast();
-  const [deviceStatus, setDeviceStatus] = useState<any>({});
-  const [wifiNetworks, setWifiNetworks] = useState<any[]>([]);
-  const [selectedNetwork, setSelectedNetwork] = useState<string | null>(null);
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [networks, setNetworks] = useState([]);
+  const [deviceStatus, setDeviceStatus] = useState(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [wifiPassword, setWifiPassword] = useState("");
 
   useEffect(() => {
     if (currentUser) {
-      const unsubscribeStatus = getDeviceStatus(currentUser.uid, (data) => {
-        if (data) {
-          setDeviceStatus(data);
-        } else {
-          setDeviceStatus({});
-        }
-      });
-
-      const unsubscribeNetworks = getWifiNetworks(currentUser.uid, (data) => {
+      getWifiNetworks(currentUser.uid, (data) => {
         if (data) {
           const networksArray = Object.keys(data).map(key => ({
             id: key,
-            ...data[key]
+            ssid: data[key].ssid,
+            strength: data[key].strength,
+            secured: data[key].secured
           }));
-          setWifiNetworks(networksArray.sort((a, b) => b.signal - a.signal));
-        } else {
-          setWifiNetworks([]);
+          setNetworks(networksArray);
         }
       });
 
-      return () => {
-        unsubscribeStatus();
-        unsubscribeNetworks();
-      };
+      getDeviceStatus(currentUser.uid, (status) => {
+        setDeviceStatus(status);
+        setIsConnected(status?.online);
+      });
     }
   }, [currentUser]);
 
-  const handleRefreshNetworks = () => {
-    if (currentUser) {
-      setRefreshing(true);
-      // In a real app, you would trigger a scan on the device via Firebase
-      // Here we'll simulate it with a timeout
-      setTimeout(() => {
-        setRefreshing(false);
-        toast({
-          title: "Networks Refreshed",
-          description: "Available Wi-Fi networks have been updated",
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    // Simulate a delay before getting new data
+    setTimeout(() => {
+      if (currentUser) {
+        getWifiNetworks(currentUser.uid, (data) => {
+          if (data) {
+            const networksArray = Object.keys(data).map(key => ({
+              id: key,
+              ssid: data[key].ssid,
+              strength: data[key].strength,
+              secured: data[key].secured
+            }));
+            setNetworks(networksArray);
+          }
         });
-      }, 3000);
-    }
-  };
-
-  const handleConnectWifi = async () => {
-    if (currentUser && selectedNetwork) {
-      setLoading(true);
-      try {
-        await setWifiCredentials(currentUser.uid, selectedNetwork, password);
-        
-        toast({
-          title: "Connection Request Sent",
-          description: "Your device is attempting to connect to the network",
-        });
-        
-        // Close dialog
-        setDialogOpen(false);
-        
-        // Reset form
-        setPassword("");
-        setSelectedNetwork(null);
-      } catch (error) {
-        console.error("Error setting WiFi credentials:", error);
-        toast({
-          title: "Connection Failed",
-          description: "Failed to send connection request to device",
-          variant: "destructive",
-        });
-      } finally {
-        setLoading(false);
       }
+      setIsRefreshing(false);
+    }, 1500);
+  };
+
+  const handleConnect = (ssid) => {
+    if (currentUser) {
+      setWifiCredentials(currentUser.uid, ssid, wifiPassword)
+        .then(() => {
+          setWifiPassword("");
+          handleRefresh();
+        });
     }
   };
 
-  const getSignalStrength = (signal: number) => {
-    if (signal >= -50) return "Excellent";
-    if (signal >= -60) return "Good";
-    if (signal >= -70) return "Fair";
-    return "Poor";
-  };
-
-  const getSignalIcon = (signal: number) => {
-    if (signal >= -50) return "••••";
-    if (signal >= -60) return "•••·";
-    if (signal >= -70) return "••··";
-    return "•···";
+  const renderNetworkStrength = (strength) => {
+    if (strength > 75) return "🌟";
+    if (strength > 50) return "⭐";
+    if (strength > 25) return "✨";
+    return "⚪";
   };
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Device Connectivity</CardTitle>
-          <CardDescription>Manage your pet feeder's network connection</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-6">
-            <div className="bg-muted p-4 rounded-lg">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  {deviceStatus.wifiConnected ? (
-                    <Wifi className="h-5 w-5 text-green-500" />
-                  ) : (
-                    <WifiOff className="h-5 w-5 text-red-500" />
-                  )}
-                  <span className="font-medium">Connection Status</span>
-                </div>
-                <span className={deviceStatus.wifiConnected ? "text-green-500" : "text-red-500"}>
-                  {deviceStatus.wifiConnected ? "Connected" : "Disconnected"}
+    <div className="container mx-auto py-6">
+      <h1 className="text-3xl font-bold mb-6">Device Connectivity</h1>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Signal className="mr-2 h-5 w-5" />
+              Device Status
+            </CardTitle>
+            <CardDescription>Current status of your pet feeder device</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium">Status:</span>
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${deviceStatus?.online ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                  {deviceStatus?.online ? 'Online' : 'Offline'}
                 </span>
               </div>
-              
-              {deviceStatus.wifiConnected && deviceStatus.currentNetwork && (
-                <div className="mt-3 pl-8">
-                  <div className="text-sm space-y-1">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Network</span>
-                      <span>{deviceStatus.currentNetwork}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">IP Address</span>
-                      <span>{deviceStatus.ipAddress || "Unknown"}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Signal</span>
-                      <span>{deviceStatus.signalStrength ? `${deviceStatus.signalStrength}dBm` : "Unknown"}</span>
-                    </div>
-                  </div>
+              {deviceStatus?.lastSeen && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Last Seen:</span>
+                  <span className="text-sm text-gray-600">
+                    {new Date(deviceStatus.lastSeen).toLocaleString()}
+                  </span>
+                </div>
+              )}
+              {deviceStatus?.batteryLevel !== undefined && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Battery Level:</span>
+                  <span className="text-sm text-gray-600">
+                    {deviceStatus.batteryLevel}%
+                  </span>
+                </div>
+              )}
+              {deviceStatus?.firmwareVersion && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Firmware:</span>
+                  <span className="text-sm text-gray-600">
+                    {deviceStatus.firmwareVersion}
+                  </span>
                 </div>
               )}
             </div>
-            
-            {!deviceStatus.online && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Device Offline</AlertTitle>
-                <AlertDescription>
-                  Your pet feeder is currently offline. Make sure it is powered on and within range of your WiFi network.
-                </AlertDescription>
-              </Alert>
-            )}
-            
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-medium">Available Networks</h3>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleRefreshNetworks}
-                disabled={refreshing || !deviceStatus.online}
-              >
-                {refreshing ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Refresh className="mr-2 h-4 w-4" />
-                )}
-                Refresh
-              </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Wifi className="mr-2 h-5 w-5" />
+              WiFi Connection
+            </CardTitle>
+            <CardDescription>Current WiFi connection status</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium">Status:</span>
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${isConnected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                  {isConnected ? 'Connected' : 'Disconnected'}
+                </span>
+              </div>
+              {deviceStatus?.wifiName && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Network:</span>
+                  <span className="text-sm text-gray-600">
+                    {deviceStatus.wifiName}
+                  </span>
+                </div>
+              )}
+              {deviceStatus?.ipAddress && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">IP Address:</span>
+                  <span className="text-sm text-gray-600">
+                    {deviceStatus.ipAddress}
+                  </span>
+                </div>
+              )}
+              {deviceStatus?.signalStrength && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Signal Strength:</span>
+                  <span className="text-sm text-gray-600 flex items-center">
+                    {renderNetworkStrength(deviceStatus.signalStrength)}
+                    {deviceStatus.signalStrength}%
+                  </span>
+                </div>
+              )}
             </div>
-            
-            {wifiNetworks.length > 0 ? (
-              <div className="border rounded-md">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Network Name</TableHead>
-                      <TableHead>Security</TableHead>
-                      <TableHead>Signal</TableHead>
-                      <TableHead></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {wifiNetworks.map((network) => (
-                      <TableRow key={network.id} className={deviceStatus.currentNetwork === network.ssid ? "bg-muted/50" : ""}>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center space-x-2">
-                            <Wifi className="h-4 w-4 text-pet-primary" />
-                            <span>{network.ssid}</span>
-                            {deviceStatus.currentNetwork === network.ssid && (
-                              <CheckCircle className="h-3 w-3 text-green-500 ml-1" />
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {network.secured ? (
-                            <div className="flex items-center">
-                              <LockKeyhole className="h-3 w-3 mr-1" />
-                              <span>Secured</span>
-                            </div>
-                          ) : (
-                            "Open"
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center space-x-1">
-                            <span className="font-mono">{getSignalIcon(network.signal)}</span>
-                            <span className="text-xs text-muted-foreground">
-                              ({getSignalStrength(network.signal)})
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Dialog open={dialogOpen && selectedNetwork === network.ssid} onOpenChange={(open) => {
-                            setDialogOpen(open);
-                            if (!open) setSelectedNetwork(null);
-                          }}>
-                            <DialogTrigger asChild>
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                onClick={() => setSelectedNetwork(network.ssid)}
-                                disabled={!deviceStatus.online || deviceStatus.currentNetwork === network.ssid}
-                              >
-                                {deviceStatus.currentNetwork === network.ssid ? "Connected" : "Connect"}
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                              <DialogHeader>
-                                <DialogTitle>Connect to Wi-Fi</DialogTitle>
-                                <DialogDescription>
-                                  Enter the password for {selectedNetwork}
-                                </DialogDescription>
-                              </DialogHeader>
-                              <div className="space-y-4 py-4">
-                                <div className="space-y-2">
-                                  <Label htmlFor="wifi-password">Wi-Fi Password</Label>
-                                  <Input
-                                    id="wifi-password"
-                                    type="password"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    placeholder="Enter network password"
-                                  />
-                                </div>
-                              </div>
-                              <DialogFooter>
-                                <Button variant="outline" onClick={() => {
-                                  setDialogOpen(false);
-                                  setSelectedNetwork(null);
-                                }}>
-                                  Cancel
-                                </Button>
-                                <Button onClick={handleConnectWifi} disabled={loading || !password}>
-                                  {loading ? (
-                                    <>
-                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                      Connecting...
-                                    </>
-                                  ) : (
-                                    "Connect"
-                                  )}
-                                </Button>
-                              </DialogFooter>
-                            </DialogContent>
-                          </Dialog>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            ) : (
-              <div className="text-center py-6 border rounded-md">
-                <WifiOff className="h-8 w-8 text-muted-foreground/50 mx-auto mb-2" />
-                <p className="text-muted-foreground">
-                  {refreshing 
-                    ? "Scanning for networks..." 
-                    : deviceStatus.online 
-                      ? "No networks found. Try refreshing." 
-                      : "Device is offline. Cannot scan for networks."}
-                </p>
-              </div>
-            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="mb-6">
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <div>
+            <CardTitle>Available Networks</CardTitle>
+            <CardDescription>Select a WiFi network to connect your device</CardDescription>
           </div>
-        </CardContent>
-      </Card>
-      
-      <Card>
-        <CardHeader>
-          <CardTitle>Connectivity Troubleshooting</CardTitle>
+          <Button 
+            size="sm" 
+            variant="outline" 
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="ml-2"
+          >
+            <RefreshCw className={`h-4 w-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
+            {isRefreshing ? 'Refreshing...' : 'Refresh'}
+          </Button>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <h3 className="font-medium">Device Won't Connect</h3>
-              <p className="text-sm text-muted-foreground">
-                Make sure your pet feeder is powered on and within range of your Wi-Fi router.
-                Try moving it closer to improve signal strength.
-              </p>
-            </div>
-            
-            <div className="space-y-2">
-              <h3 className="font-medium">Connection Keeps Dropping</h3>
-              <p className="text-sm text-muted-foreground">
-                Check for interference from other devices. Your pet feeder works best with a
-                strong, stable Wi-Fi connection.
-              </p>
-            </div>
-            
-            <div className="space-y-2">
-              <h3 className="font-medium">Can't Find Your Network</h3>
-              <p className="text-sm text-muted-foreground">
-                The device supports 2.4GHz Wi-Fi networks only. If you have a dual-band router,
-                make sure the 2.4GHz band is enabled.
-              </p>
-            </div>
-          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Network Name</TableHead>
+                <TableHead>Signal</TableHead>
+                <TableHead>Security</TableHead>
+                <TableHead className="text-right">Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {networks.length > 0 ? (
+                networks.map((network) => (
+                  <TableRow key={network.id}>
+                    <TableCell className="font-medium">{network.ssid}</TableCell>
+                    <TableCell>{renderNetworkStrength(network.strength)}</TableCell>
+                    <TableCell>{network.secured ? '🔒 Secured' : '🔓 Open'}</TableCell>
+                    <TableCell className="text-right">
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button size="sm" variant="outline">Connect</Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Connect to {network.ssid}</DialogTitle>
+                            <DialogDescription>
+                              Enter the WiFi password to connect your pet feeder to this network.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="py-4">
+                            <label className="text-sm font-medium mb-2 block">Password</label>
+                            <Input 
+                              type="password" 
+                              placeholder="WiFi password" 
+                              value={wifiPassword}
+                              onChange={(e) => setWifiPassword(e.target.value)}
+                            />
+                          </div>
+                          <DialogFooter>
+                            <Button 
+                              onClick={() => handleConnect(network.ssid)} 
+                              disabled={network.secured && !wifiPassword}
+                            >
+                              Connect Device
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center py-4 text-gray-500">
+                    {isRefreshing ? 'Scanning for networks...' : 'No WiFi networks found. Click refresh to scan again.'}
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
     </div>

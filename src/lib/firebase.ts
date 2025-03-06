@@ -5,7 +5,10 @@ import {
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
   onAuthStateChanged,
-  User
+  User,
+  updatePassword as firebaseUpdatePassword,
+  EmailAuthProvider,
+  reauthenticateWithCredential
 } from "firebase/auth";
 import { 
   getDatabase, 
@@ -50,6 +53,19 @@ export const signOut = () => {
 
 export const getCurrentUser = (): User | null => {
   return auth.currentUser;
+};
+
+export const updatePassword = async (user: User, currentPassword: string, newPassword: string) => {
+  // First reauthenticate the user
+  const credential = EmailAuthProvider.credential(
+    user.email!,
+    currentPassword
+  );
+  
+  await reauthenticateWithCredential(user, credential);
+  
+  // Then update the password
+  return firebaseUpdatePassword(user, newPassword);
 };
 
 // Database helper functions
