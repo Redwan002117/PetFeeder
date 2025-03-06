@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Wifi, WifiOff, LockKeyhole, AlertCircle, Refresh, CheckCircle, Loader2 } from "lucide-react";
+import { Wifi, WifiOff, LockKeyhole, AlertCircle, RefreshCw, CheckCircle, Loader2 } from "lucide-react";
 import { getDeviceStatus, getWifiNetworks, setWifiCredentials } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 

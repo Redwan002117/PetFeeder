@@ -1,4 +1,3 @@
-
 import { initializeApp } from "firebase/app";
 import { 
   getAuth, 
@@ -22,14 +21,13 @@ import {
 
 // Your Firebase configuration
 const firebaseConfig = {
-  // Replace with your actual Firebase config
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  databaseURL: "YOUR_DATABASE_URL",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyDFEVV0zXBXeZkzdcVz6sARU5pHxJL80N4",
+  authDomain: "catfeeder002117.firebaseapp.com",
+  databaseURL: "https://catfeeder002117-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "catfeeder002117",
+  storageBucket: "catfeeder002117.firebasestorage.app",
+  messagingSenderId: "185578811050",
+  appId: "1:185578811050:web:eea3a21fd11073ae1e6ad3"
 };
 
 // Initialize Firebase
