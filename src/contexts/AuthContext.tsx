@@ -5,7 +5,8 @@ import {
   onAuthStateChanged, 
   signIn, 
   signOut as firebaseSignOut, 
-  signUp 
+  signUp,
+  updateUserProfile
 } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 import { User } from "firebase/auth";
@@ -16,6 +17,7 @@ interface AuthContextProps {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  updateUserProfile: (profileData: { displayName?: string, photoURL?: string }) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextProps | undefined>(undefined);
@@ -93,12 +95,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const handleUpdateUserProfile = async (profileData: { displayName?: string, photoURL?: string }) => {
+    try {
+      if (!currentUser) throw new Error("No user is logged in");
+      await updateUserProfile(currentUser, profileData);
+      // Update the currentUser state to reflect changes
+      setCurrentUser(prev => {
+        if (!prev) return null;
+        return Object.assign(Object.create(Object.getPrototypeOf(prev)), {
+          ...prev,
+          ...profileData
+        });
+      });
+      toast({
+        title: "Profile updated",
+        description: "Your profile has been updated successfully.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Update failed",
+        description: error.message,
+        variant: "destructive",
+      });
+      throw error;
+    }
+  };
+
   const value = {
     currentUser,
     loading,
     login,
     register,
     logout,
+    updateUserProfile: handleUpdateUserProfile,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

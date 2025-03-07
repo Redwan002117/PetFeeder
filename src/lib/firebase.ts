@@ -8,7 +8,8 @@ import {
   User,
   updatePassword as firebaseUpdatePassword,
   EmailAuthProvider,
-  reauthenticateWithCredential
+  reauthenticateWithCredential,
+  updateProfile
 } from "firebase/auth";
 import { 
   getDatabase, 
@@ -21,6 +22,12 @@ import {
   get,
   serverTimestamp
 } from "firebase/database";
+import {
+  getStorage,
+  ref as storageRef,
+  uploadBytes,
+  getDownloadURL
+} from "firebase/storage";
 
 // Your Firebase configuration
 const firebaseConfig = {
@@ -37,6 +44,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const database = getDatabase(app);
+const storage = getStorage(app);
 
 // Authentication helper functions
 export const signIn = (email: string, password: string) => {
@@ -66,6 +74,27 @@ export const updatePassword = async (user: User, currentPassword: string, newPas
   
   // Then update the password
   return firebaseUpdatePassword(user, newPassword);
+};
+
+export const updateUserProfile = async (user: User, profileData: { displayName?: string, photoURL?: string }) => {
+  return updateProfile(user, profileData);
+};
+
+// Storage helper functions
+export const uploadProfilePicture = async (userId: string, file: File) => {
+  const profilePicRef = storageRef(storage, `users/${userId}/profilePicture`);
+  await uploadBytes(profilePicRef, file);
+  return getDownloadURL(profilePicRef);
+};
+
+export const getProfilePictureUrl = async (userId: string) => {
+  try {
+    const profilePicRef = storageRef(storage, `users/${userId}/profilePicture`);
+    return await getDownloadURL(profilePicRef);
+  } catch (error) {
+    // Return null if no profile picture exists
+    return null;
+  }
 };
 
 // Database helper functions
@@ -120,4 +149,4 @@ export const setWifiCredentials = (userId: string, ssid: string, password: strin
   });
 };
 
-export { auth, database, onAuthStateChanged };
+export { auth, database, onAuthStateChanged, updateProfile };
