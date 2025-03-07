@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { 
   auth, 
@@ -6,18 +5,34 @@ import {
   signIn, 
   signOut as firebaseSignOut, 
   signUp,
-  updateUserProfile
+  updateUserProfile,
+  getUserData
 } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 import { User } from "firebase/auth";
 
+interface UserPermissions {
+  canFeed: boolean;
+  canSchedule: boolean;
+  canViewStats: boolean;
+}
+
+interface UserData {
+  role: 'admin' | 'user';
+  permissions: UserPermissions;
+  email: string;
+}
+
 interface AuthContextProps {
   currentUser: User | null;
+  userData: UserData | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, isAdmin?: boolean) => Promise<void>;
   logout: () => Promise<void>;
   updateUserProfile: (profileData: { displayName?: string, photoURL?: string }) => Promise<void>;
+  isAdmin: boolean;
+  hasPermission: (permission: keyof UserPermissions) => boolean;
 }
 
 const AuthContext = createContext<AuthContextProps | undefined>(undefined);
@@ -32,12 +47,42 @@ export const useAuth = () => {
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
+  const fetchUserData = async (user: User) => {
+    try {
+      const snapshot = await getUserData(user.uid);
+      if (snapshot.exists()) {
+        setUserData(snapshot.val() as UserData);
+      } else {
+        const defaultUserData = {
+          email: user.email || '',
+          role: 'user',
+          permissions: {
+            canFeed: true,
+            canSchedule: true,
+            canViewStats: true,
+          }
+        };
+        setUserData(defaultUserData);
+      }
+    } catch (error) {
+      console.error("Error fetching user data:", error);
+    }
+  };
+
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
+      
+      if (user) {
+        await fetchUserData(user);
+      } else {
+        setUserData(null);
+      }
+      
       setLoading(false);
     });
 
@@ -61,9 +106,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const register = async (email: string, password: string) => {
+  const register = async (email: string, password: string, isAdmin = false) => {
     try {
-      await signUp(email, password);
+      await signUp(email, password, isAdmin);
       toast({
         title: "Registration successful",
         description: "Your account has been created!",
@@ -99,7 +144,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       if (!currentUser) throw new Error("No user is logged in");
       await updateUserProfile(currentUser, profileData);
-      // Update the currentUser state to reflect changes
       setCurrentUser(prev => {
         if (!prev) return null;
         return Object.assign(Object.create(Object.getPrototypeOf(prev)), {
@@ -121,13 +165,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const isAdmin = userData?.role === 'admin';
+  
+  const hasPermission = (permission: keyof UserPermissions) => {
+    if (!userData) return false;
+    if (isAdmin) return true;
+    return !!userData.permissions[permission];
+  };
+
   const value = {
     currentUser,
+    userData,
     loading,
     login,
     register,
     logout,
     updateUserProfile: handleUpdateUserProfile,
+    isAdmin,
+    hasPermission,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -5,10 +5,16 @@ import Layout from "@/components/Layout";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
+  requiredPermission?: "canFeed" | "canSchedule" | "canViewStats";
+  adminOnly?: boolean;
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { currentUser, loading } = useAuth();
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
+  children, 
+  requiredPermission,
+  adminOnly = false
+}) => {
+  const { currentUser, loading, hasPermission, isAdmin } = useAuth();
 
   if (loading) {
     return (
@@ -20,6 +26,16 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
 
   if (!currentUser) {
     return <Navigate to="/login" />;
+  }
+
+  // Check if the route is admin-only
+  if (adminOnly && !isAdmin) {
+    return <Navigate to="/" />;
+  }
+
+  // Check if user has required permission
+  if (requiredPermission && !hasPermission(requiredPermission)) {
+    return <Navigate to="/" />;
   }
 
   return <Layout>{children}</Layout>;

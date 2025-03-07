@@ -11,6 +11,7 @@ import ManualFeed from "@/pages/ManualFeed";
 import Statistics from "@/pages/Statistics";
 import Connectivity from "@/pages/Connectivity";
 import Profile from "@/pages/Profile";
+import AdminDashboard from "@/pages/AdminDashboard";
 import NotFound from "@/pages/NotFound";
 import "./App.css";
 
@@ -32,7 +33,7 @@ function App() {
           <Route
             path="/schedule"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredPermission="canSchedule">
                 <Schedule />
               </ProtectedRoute>
             }
@@ -40,7 +41,7 @@ function App() {
           <Route
             path="/manual-feed"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredPermission="canFeed">
                 <ManualFeed />
               </ProtectedRoute>
             }
@@ -48,7 +49,7 @@ function App() {
           <Route
             path="/statistics"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredPermission="canViewStats">
                 <Statistics />
               </ProtectedRoute>
             }
@@ -66,6 +67,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <Profile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute adminOnly={true}>
+                <AdminDashboard />
               </ProtectedRoute>
             }
           />

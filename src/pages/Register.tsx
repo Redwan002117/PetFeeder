@@ -1,11 +1,13 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { HandPlatter } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { getAllUsers } from "@/lib/firebase";
 
 const Register = () => {
   const [email, setEmail] = useState("");
@@ -13,8 +15,25 @@ const Register = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showAdminOption, setShowAdminOption] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const checkExistingUsers = async () => {
+      // This unsubscribe handle won't be called, but it's required by the function
+      getAllUsers((users) => {
+        // If there are no users yet, this is the first user, so they can be an admin
+        if (!users || Object.keys(users).length === 0) {
+          setShowAdminOption(true);
+          setIsAdmin(true); // First user should be admin by default
+        }
+      });
+    };
+
+    checkExistingUsers();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,7 +45,7 @@ const Register = () => {
     try {
       setError("");
       setLoading(true);
-      await register(email, password);
+      await register(email, password, isAdmin);
       navigate("/");
     } catch (error: any) {
       setError(error.message || "Failed to create an account");
@@ -95,6 +114,23 @@ const Register = () => {
                 required
               />
             </div>
+            
+            {showAdminOption && (
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="admin" 
+                  checked={isAdmin}
+                  onCheckedChange={(checked) => setIsAdmin(checked === true)}
+                />
+                <label
+                  htmlFor="admin"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  Register as administrator
+                </label>
+              </div>
+            )}
+            
             <Button 
               type="submit"
               className="w-full"

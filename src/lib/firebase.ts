@@ -1,3 +1,4 @@
+
 import { initializeApp } from "firebase/app";
 import { 
   getAuth, 
@@ -51,8 +52,40 @@ export const signIn = (email: string, password: string) => {
   return signInWithEmailAndPassword(auth, email, password);
 };
 
-export const signUp = (email: string, password: string) => {
-  return createUserWithEmailAndPassword(auth, email, password);
+export const signUp = async (email: string, password: string, isAdmin = false) => {
+  const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+  // Create user data with role in the database
+  const userData = {
+    email: email,
+    role: isAdmin ? 'admin' : 'user',
+    createdAt: serverTimestamp(),
+    permissions: {
+      canFeed: !isAdmin, // Regular users have feeding permissions by default
+      canSchedule: !isAdmin, // Regular users have scheduling permissions by default
+      canViewStats: true, // Everyone can view stats
+    }
+  };
+  
+  await set(ref(database, `users/${userCredential.user.uid}`), userData);
+  return userCredential;
+};
+
+export const getUserData = (userId: string) => {
+  const userRef = ref(database, `users/${userId}`);
+  return get(userRef);
+};
+
+export const getAllUsers = (callback: (users: any) => void) => {
+  const usersRef = ref(database, 'users');
+  return onValue(usersRef, (snapshot) => {
+    const users = snapshot.val();
+    callback(users);
+  });
+};
+
+export const updateUserPermissions = (userId: string, permissions: any) => {
+  const userPermissionsRef = ref(database, `users/${userId}/permissions`);
+  return update(userPermissionsRef, permissions);
 };
 
 export const signOut = () => {
