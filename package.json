@@ -1,9 +1,9 @@
 {
-  "name": "vite_react_shadcn_ts",
+  "name": "petfeeder",
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "homepage": "https://Redwan002117.github.io/petfeeder-hub",
+  "homepage": "https://Redwan002117.github.io/PetFeeder",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
