@@ -29,7 +29,7 @@ messaging.onBackgroundMessage((payload) => {
   const notificationTitle = payload.notification.title;
   const notificationOptions = {
     body: payload.notification.body,
-    icon: '/PetFeeder/favicon.ico'
+    icon: '/favicon.ico'
   };
 
   self.registration.showNotification(notificationTitle, notificationOptions);
