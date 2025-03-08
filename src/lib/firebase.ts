@@ -1,6 +1,11 @@
-import { initializeApp } from "firebase/app";
 import { 
+  initializeApp, 
   getAuth, 
+  getDatabase, 
+  getStorage, 
+  getMessaging 
+} from './firebase-imports';
+import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
@@ -17,7 +22,6 @@ import {
   verifyBeforeUpdateEmail
 } from "firebase/auth";
 import { 
-  getDatabase, 
   ref, 
   set, 
   onValue, 
@@ -28,23 +32,15 @@ import {
   serverTimestamp
 } from "firebase/database";
 import {
-  getStorage,
   ref as storageRef,
   uploadBytes,
   getDownloadURL
 } from "firebase/storage";
-import { getMessaging, getToken, onMessage } from "firebase/messaging";
+import { getToken, onMessage } from "firebase/messaging";
+import firebaseConfig from "./firebase-config";
 
-// Your Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyDFEVV0zXBXeZkzdcVz6sARU5pHxJL80N4",
-  authDomain: "catfeeder002117.firebaseapp.com",
-  databaseURL: "https://catfeeder002117-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "catfeeder002117",
-  storageBucket: "catfeeder002117.firebasestorage.app",
-  messagingSenderId: "185578811050",
-  appId: "1:185578811050:web:eea3a21fd11073ae1e6ad3"
-};
+// Environment detection
+const isDevelopment = import.meta.env.DEV || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
@@ -76,8 +72,14 @@ if (typeof window !== 'undefined') {
 }
 
 // Authentication helper functions
-export const signIn = (email: string, password: string) => {
-  return signInWithEmailAndPassword(auth, email, password);
+export const signIn = async (email: string, password: string) => {
+  try {
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    return userCredential.user;
+  } catch (error) {
+    console.error("Error signing in:", error);
+    throw error;
+  }
 };
 
 export const signInWithGoogle = async () => {
@@ -133,36 +135,87 @@ export const signInWithGoogle = async () => {
   }
 };
 
-export const signUp = async (email: string, password: string, isAdmin = false) => {
-  const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-  const user = userCredential.user;
-  
-  // Create user data with role in the database
-  const userData = {
-    email: email,
-    role: isAdmin ? 'admin' : 'user',
-    createdAt: serverTimestamp(),
-    emailVerified: false, // Track email verification status
-    permissions: {
-      canFeed: !isAdmin, // Regular users have feeding permissions by default
-      canSchedule: !isAdmin, // Regular users have scheduling permissions by default
-      canViewStats: true, // Everyone can view stats
+export const signUp = async (email: string, password: string, isAdmin: boolean = false) => {
+  try {
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
+    
+    // Set user data in the database
+    const userData = {
+      role: isAdmin ? 'admin' : 'user',
+      createdAt: new Date().toISOString(),
+      emailVerified: false,
+      permissions: {
+        canViewDevices: true,
+        canAddDevices: isAdmin,
+        canRemoveDevices: isAdmin,
+        canEditDevices: isAdmin,
+        canViewSchedules: true,
+        canAddSchedules: true,
+        canRemoveSchedules: true,
+        canEditSchedules: true,
+      }
+    };
+    
+    await set(ref(database, `users/${user.uid}`), userData);
+    
+    // Send verification email for admin accounts
+    if (isAdmin) {
+      await firebaseSendEmailVerification(user);
     }
-  };
-  
-  await set(ref(database, `users/${user.uid}`), userData);
-  
-  // Send verification email for admin accounts
-  if (isAdmin) {
-    await firebaseSendEmailVerification(user);
+    
+    return { user, userData };
+  } catch (error) {
+    console.error("Error signing up:", error);
+    throw error;
   }
-  
-  return userCredential;
 };
 
-export const getUserData = (userId: string) => {
-  const userRef = ref(database, `users/${userId}`);
-  return get(userRef);
+// Database functions
+export const setData = async (path: string, data: any) => {
+  try {
+    await set(ref(database, path), data);
+  } catch (error) {
+    console.error(`Error setting data at ${path}:`, error);
+    throw error;
+  }
+};
+
+export const updateData = async (path: string, data: any) => {
+  try {
+    await update(ref(database, path), data);
+  } catch (error) {
+    console.error(`Error updating data at ${path}:`, error);
+    throw error;
+  }
+};
+
+export const getData = async (path: string) => {
+  try {
+    const snapshot = await get(ref(database, path));
+    return snapshot.exists() ? snapshot.val() : null;
+  } catch (error) {
+    console.error(`Error getting data from ${path}:`, error);
+    throw error;
+  }
+};
+
+export const getUserData = async (userId: string) => {
+  try {
+    return await getData(`users/${userId}`);
+  } catch (error) {
+    console.error("Error getting user data:", error);
+    throw error;
+  }
+};
+
+export const removeData = async (path: string) => {
+  try {
+    await remove(ref(database, path));
+  } catch (error) {
+    console.error(`Error removing data at ${path}:`, error);
+    throw error;
+  }
 };
 
 export const getAllUsers = (callback: (users: any) => void) => {
@@ -178,8 +231,13 @@ export const updateUserPermissions = (userId: string, permissions: any) => {
   return update(userPermissionsRef, permissions);
 };
 
-export const signOut = () => {
-  return firebaseSignOut(auth);
+export const signOut = async () => {
+  try {
+    await firebaseSignOut(auth);
+  } catch (error) {
+    console.error("Error signing out:", error);
+    throw error;
+  }
 };
 
 export const getCurrentUser = (): User | null => {
@@ -238,7 +296,7 @@ export const uploadProfilePicture = async (userId: string, file: File) => {
 export const getProfilePictureUrl = async (userId: string) => {
   try {
     // First check if we're in development mode
-    const isDevelopment = process.env.NODE_ENV === 'development' || 
+    const isDevelopment = import.meta.env.DEV || 
                           window.location.hostname === 'localhost' ||
                           window.location.hostname === '127.0.0.1';
     
@@ -425,9 +483,14 @@ export const isEmailVerified = (user: User | null) => {
   return user?.emailVerified || false;
 };
 
-export const verifyEmail = async (oobCode: string) => {
-  const auth = getAuth();
-  return applyActionCode(auth, oobCode);
+export const verifyEmail = async (actionCode: string) => {
+  try {
+    await applyActionCode(auth, actionCode);
+    return true;
+  } catch (error) {
+    console.error("Error verifying email:", error);
+    throw error;
+  }
 };
 
 export const updateEmailVerificationStatus = async (userId: string, isVerified: boolean) => {
@@ -455,6 +518,7 @@ window.addEventListener('unhandledrejection', (event) => {
 
 // Export Firebase instances and functions
 export { 
+  app, 
   auth, 
   database, 
   storage, 
