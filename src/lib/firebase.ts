@@ -38,6 +38,7 @@ import {
 } from "firebase/storage";
 import { getToken, onMessage } from "firebase/messaging";
 import firebaseConfig from "./firebase-config";
+import { throttle } from 'lodash';
 
 // Environment detection
 const isDevelopment = import.meta.env.DEV || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
@@ -70,6 +71,33 @@ if (typeof window !== 'undefined') {
     console.error("Failed to initialize Firebase messaging:", error);
   }
 }
+
+// Add this rate limiting utility
+const rateLimiter = {
+  timestamps: {},
+  maxRequests: 10,
+  timeWindow: 60000, // 1 minute
+  
+  checkLimit(key: string): boolean {
+    const now = Date.now();
+    const timestamps = this.timestamps[key] || [];
+    
+    // Remove timestamps outside the time window
+    const recentTimestamps = timestamps.filter(ts => now - ts < this.timeWindow);
+    
+    // Check if the number of recent requests exceeds the limit
+    if (recentTimestamps.length >= this.maxRequests) {
+      console.warn(`Rate limit exceeded for ${key}`);
+      return false;
+    }
+    
+    // Add the current timestamp
+    recentTimestamps.push(now);
+    this.timestamps[key] = recentTimestamps;
+    
+    return true;
+  }
+};
 
 // Authentication helper functions
 export const signIn = async (email: string, password: string) => {
@@ -203,6 +231,12 @@ export const getData = async (path: string) => {
 
 export const getUserData = async (userId: string) => {
   try {
+    // Apply rate limiting
+    const rateLimitKey = `getUserData_${userId}`;
+    if (!rateLimiter.checkLimit(rateLimitKey)) {
+      throw new Error("Rate limit exceeded. Please try again later.");
+    }
+    
     return await getData(`users/${userId}`);
   } catch (error) {
     console.error("Error getting user data:", error);

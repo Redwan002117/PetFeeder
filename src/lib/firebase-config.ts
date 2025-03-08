@@ -1,12 +1,12 @@
 // Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyDFEVV0zXBXeZkzdcVz6sARU5pHxJL80N4",
-  authDomain: "catfeeder002117.firebaseapp.com",
-  databaseURL: "https://catfeeder002117-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "catfeeder002117",
-  storageBucket: "catfeeder002117.firebasestorage.app",
-  messagingSenderId: "185578811050",
-  appId: "1:185578811050:web:eea3a21fd11073ae1e6ad3"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
 export default firebaseConfig; 
