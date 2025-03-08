@@ -1,8 +1,8 @@
 // This script handles client-side routing with GitHub Pages
 // It's based on the solution from https://github.com/rafgraph/spa-github-pages
 
-// Redirect to the correct route if we're on a 404 page
-(function() {
+// Wrap everything in a function that runs when the DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
   // Don't run this script on the development server
   if (window.location.hostname === 'localhost' || 
       window.location.hostname === '127.0.0.1') {
@@ -20,8 +20,19 @@
     return;
   }
   
-  // If we're on a route that doesn't exist, redirect to the home page
-  if (document.title.includes('404') || document.body.innerHTML.includes('404')) {
-    window.location.replace('/');
+  // Check for 404 page in a safe way
+  try {
+    var pageTitle = document.title || '';
+    var bodyContent = '';
+    
+    if (document.body) {
+      bodyContent = document.body.textContent || '';
+    }
+    
+    if (pageTitle.includes('404') || bodyContent.includes('404')) {
+      window.location.replace('/');
+    }
+  } catch (error) {
+    console.error('Error in SPA redirect script:', error);
   }
-})(); 
+}); 
