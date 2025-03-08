@@ -43,20 +43,35 @@ import { throttle } from 'lodash';
 // Environment detection
 const isDevelopment = import.meta.env.DEV || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
-// Check if ad blocker is active
+// Check if ad blocker is active using a safer method
 const checkAdBlocker = async () => {
   try {
-    // Try to fetch a known ad-related URL
-    const response = await fetch('https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js', {
-      method: 'HEAD',
-      mode: 'no-cors'
-    });
+    // Create a bait element that ad blockers typically target
+    const bait = document.createElement('div');
+    bait.className = 'ad-placement ad-banner adsbox';
+    bait.style.cssText = 'position: absolute; left: -999px; top: -999px; height: 1px; width: 1px;';
+    document.body.appendChild(bait);
     
-    // If we get here, ad blocker is likely not active
-    return false;
+    // Wait a moment for ad blockers to act
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Check if the bait was hidden or removed by an ad blocker
+    const isBlocked = bait.offsetHeight === 0 || 
+                      bait.offsetParent === null || 
+                      !document.body.contains(bait);
+    
+    // Clean up
+    if (document.body.contains(bait)) {
+      document.body.removeChild(bait);
+    }
+    
+    if (isBlocked) {
+      console.log('Ad blocker detected, using fallback methods');
+    }
+    
+    return isBlocked;
   } catch (error) {
-    // If fetch fails, ad blocker might be active
-    console.log('Ad blocker might be active, using fallback methods');
+    console.log('Error detecting ad blocker, assuming it is active');
     return true;
   }
 };
