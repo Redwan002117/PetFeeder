@@ -1,0 +1,20 @@
+User-agent: *
+Disallow: /admin/
+Disallow: /api/
+Disallow: /dashboard/
+Disallow: /profile/
+Disallow: /settings/
+Disallow: /connectivity/
+Disallow: /manual-feed/
+Disallow: /schedule/
+Disallow: /statistics/
+
+Allow: /
+Allow: /login
+Allow: /register
+Allow: /about
+Allow: /contact
+Allow: /terms
+Allow: /privacy
+
+Sitemap: https://petfeeder.redwancodes.com/sitemap.xml 
