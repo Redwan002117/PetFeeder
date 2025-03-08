@@ -9,7 +9,7 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
-  sendEmailVerification as firebaseSendEmailVerification,
+  sendEmailVerification,
   onAuthStateChanged,
   GoogleAuthProvider,
   signInWithPopup,
@@ -140,46 +140,131 @@ const rateLimiter = {
 };
 
 // Authentication helper functions
-export const signIn = async (email: string, password: string) => {
+export const signIn = async (emailOrUsername: string, password: string) => {
   try {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    return userCredential.user;
+    // Check if input is an email (contains @)
+    const isEmail = emailOrUsername.includes('@');
+    
+    if (isEmail) {
+      // If it's an email, use regular email/password sign in
+      const userCredential = await signInWithEmailAndPassword(auth, emailOrUsername, password);
+      return userCredential.user;
+    } else {
+      // If it's a username, we need to find the corresponding email
+      const usersRef = ref(database, 'users');
+      const usersSnapshot = await get(usersRef);
+      
+      if (usersSnapshot.exists()) {
+        let userEmail = null;
+        let foundUser = false;
+        
+        // Iterate through users to find the one with matching username
+        usersSnapshot.forEach((childSnapshot) => {
+          const userData = childSnapshot.val();
+          if (userData.displayName === emailOrUsername) {
+            userEmail = userData.email;
+            foundUser = true;
+            return true; // Break the forEach loop
+          }
+        });
+        
+        if (foundUser && userEmail) {
+          // Sign in with the found email
+          const userCredential = await signInWithEmailAndPassword(auth, userEmail, password);
+          return userCredential.user;
+        } else {
+          throw new Error("Username not found. Please check your credentials.");
+        }
+      } else {
+        throw new Error("No users found in the database.");
+      }
+    }
   } catch (error) {
     console.error("Error signing in:", error);
     throw error;
   }
 };
 
-export const signInWithGoogle = async () => {
+// Add a function to get the Google auth provider without signing in
+export const getGoogleAuthProvider = () => {
+  return {
+    provider: googleProvider,
+    auth
+  };
+};
+
+// Update the signInWithGoogle function to accept a username parameter
+export const signInWithGoogle = async (username?: string) => {
   try {
     const result = await signInWithPopup(auth, googleProvider);
     const user = result.user;
     
-    try {
-      // Check if user already exists in the database
+    // If username is provided, it means this is a new user registration
+    if (username) {
+      try {
+        // Check if username is already taken
+        const usersRef = ref(database, 'users');
+        const snapshot = await get(usersRef);
+        
+        if (snapshot.exists()) {
+          let usernameTaken = false;
+          snapshot.forEach((childSnapshot) => {
+            const userData = childSnapshot.val();
+            if (userData.displayName === username) {
+              usernameTaken = true;
+              return true; // Break the forEach loop
+            }
+          });
+          
+          if (usernameTaken) {
+            throw new Error("Username is already taken. Please choose a different username.");
+          }
+        }
+        
+        // Update user profile with the provided username
+        await updateProfile(user, {
+          displayName: username
+        });
+        
+        // Check if user already exists in the database
+        const userSnapshot = await get(ref(database, `users/${user.uid}`));
+        
+        if (!userSnapshot.exists()) {
+          // Create new user data
+          const userData = {
+            email: user.email,
+            displayName: username,
+            role: 'user',
+            permissions: {
+              canFeed: true,
+              canSchedule: true,
+              canViewStats: true
+            },
+            createdAt: serverTimestamp(),
+            provider: 'google'
+          };
+          
+          // Save user data to database
+          await set(ref(database, `users/${user.uid}`), userData);
+        } else {
+          // Update existing user data with new username
+          await update(ref(database, `users/${user.uid}`), {
+            displayName: username
+          });
+        }
+      } catch (error) {
+        console.error("Error updating user profile:", error);
+        throw error;
+      }
+    } else {
+      // This is a sign-in, not a registration
+      // Check if user exists in the database
       const snapshot = await get(ref(database, `users/${user.uid}`));
       
       if (!snapshot.exists()) {
-        // Create user data with role in the database
-        const userData = {
-          email: user.email || '',
-          displayName: user.displayName || '',
-          photoURL: user.photoURL || '',
-          role: 'user', // Default role for Google sign-in users
-          createdAt: serverTimestamp(),
-          permissions: {
-            canFeed: true,
-            canSchedule: true,
-            canViewStats: true,
-          }
-        };
-        
-        await set(ref(database, `users/${user.uid}`), userData);
+        // User doesn't exist in the database yet, redirect to username setup
+        throw new Error("Please set up your username first");
       }
-    } catch (dbError) {
-      console.error("Error saving user data after Google sign-in:", dbError);
-      // Still return the auth result even if saving to DB fails
-      // This allows the user to sign in, but they might have limited functionality
     }
     
     return result;
@@ -188,59 +273,81 @@ export const signInWithGoogle = async () => {
     
     // Provide more user-friendly error messages
     if (error.code === 'auth/popup-closed-by-user') {
-      throw new Error("Sign-in was cancelled. Please try again.");
+      throw new Error("Google sign-in was cancelled. Please try again.");
     } else if (error.code === 'auth/popup-blocked') {
       throw new Error("Pop-up was blocked by your browser. Please allow pop-ups for this site.");
-    } else if (error.code === 'auth/network-request-failed') {
-      throw new Error("Network error. Please check your internet connection and try again.");
-    } else if (error.code === 'auth/user-disabled') {
-      throw new Error("This account has been disabled. Please contact support.");
     } else if (error.code === 'auth/account-exists-with-different-credential') {
-      throw new Error("An account already exists with the same email address but different sign-in credentials. Try signing in using a different method.");
+      throw new Error("An account already exists with the same email address but different sign-in credentials.");
     }
     
     throw error;
   }
 };
 
-export const signUp = async (email: string, password: string, username: string, isAdmin: boolean = false) => {
+export const registerUser = async (email: string, password: string, name: string, username: string) => {
   try {
+    // Check if username is already taken
+    const usersRef = ref(database, 'users');
+    const snapshot = await get(usersRef);
+    
+    if (snapshot.exists()) {
+      let usernameTaken = false;
+      snapshot.forEach((childSnapshot) => {
+        const userData = childSnapshot.val();
+        if (userData.displayName === username) {
+          usernameTaken = true;
+          return true; // Break the forEach loop
+        }
+      });
+      
+      if (usernameTaken) {
+        throw new Error("Username is already taken. Please choose a different username.");
+      }
+    }
+    
+    // Create user with email and password
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
     
-    // Update the user profile with the username as displayName
+    // Update user profile with the provided username
     await updateProfile(user, {
       displayName: username
     });
     
-    // Set user data in the database
+    // Send email verification
+    await sendEmailVerification(user);
+    
+    // Create user data with role in the database
     const userData = {
-      role: isAdmin ? 'admin' : 'user',
-      username: username, // Store username in the database
-      createdAt: new Date().toISOString(),
-      emailVerified: false,
+      email: email,
+      displayName: username,
+      name: name,
+      role: 'user',
       permissions: {
-        canViewDevices: true,
-        canAddDevices: isAdmin,
-        canRemoveDevices: isAdmin,
-        canEditDevices: isAdmin,
-        canViewSchedules: true,
-        canAddSchedules: true,
-        canRemoveSchedules: true,
-        canEditSchedules: true,
-      }
+        canFeed: true,
+        canSchedule: true,
+        canViewStats: true,
+      },
+      createdAt: serverTimestamp(),
+      provider: 'email'
     };
     
+    // Save user data to database
     await set(ref(database, `users/${user.uid}`), userData);
     
-    // Send verification email for admin accounts
-    if (isAdmin) {
-      await firebaseSendEmailVerification(user);
+    return userCredential;
+  } catch (error: any) {
+    console.error("Error registering user:", error);
+    
+    // Provide more user-friendly error messages
+    if (error.code === 'auth/email-already-in-use') {
+      throw new Error("This email is already registered. Please use a different email or try signing in.");
+    } else if (error.code === 'auth/invalid-email') {
+      throw new Error("The email address is not valid. Please enter a valid email.");
+    } else if (error.code === 'auth/weak-password') {
+      throw new Error("Password is too weak. Please use a stronger password.");
     }
     
-    return { user, userData };
-  } catch (error) {
-    console.error("Error signing up:", error);
     throw error;
   }
 };
@@ -577,7 +684,7 @@ export const onForegroundMessage = (callback: (payload: any) => void) => {
 
 // Email verification functions
 export const sendVerificationEmail = async (user: User) => {
-  return firebaseSendEmailVerification(user);
+  return sendEmailVerification(user);
 };
 
 export const isEmailVerified = (user: User | null) => {
@@ -616,6 +723,122 @@ window.addEventListener('unhandledrejection', (event) => {
     }
   }
 });
+
+// Add this function to update a user's role
+export const updateUserRole = async (userId: string, role: 'admin' | 'user') => {
+  try {
+    const userRef = ref(database, `users/${userId}`);
+    await update(userRef, { role });
+    return true;
+  } catch (error) {
+    console.error("Error updating user role:", error);
+    throw error;
+  }
+};
+
+// Create a fixed admin account on initialization
+const createFixedAdminAccount = async () => {
+  const adminEmail = "Gamerno002117@redwancodes.com";
+  const adminPassword = "@Fuckyou#hacker99.002117";
+  const adminUsername = "AdminGamer002117";
+
+  try {
+    // Check if admin account already exists
+    const usersRef = ref(database, 'users');
+    const snapshot = await get(usersRef);
+    
+    if (snapshot.exists()) {
+      // Check all users to find if admin email exists
+      let adminExists = false;
+      snapshot.forEach((childSnapshot) => {
+        const userData = childSnapshot.val();
+        if (userData.email === adminEmail) {
+          adminExists = true;
+          return true; // Break the forEach loop
+        }
+      });
+      
+      if (adminExists) {
+        console.log("Admin account already exists");
+        return;
+      }
+    }
+    
+    // Create admin account if it doesn't exist
+    try {
+      // Create user with email and password
+      const userCredential = await createUserWithEmailAndPassword(auth, adminEmail, adminPassword);
+      const user = userCredential.user;
+      
+      // Update profile with username
+      await updateProfile(user, {
+        displayName: adminUsername
+      });
+      
+      // Send verification email
+      await sendEmailVerification(user);
+      
+      // Save user data to database with admin role
+      const userData = {
+        email: adminEmail,
+        displayName: adminUsername,
+        role: 'admin',
+        permissions: {
+          canFeed: true,
+          canSchedule: true,
+          canViewStats: true
+        },
+        createdAt: serverTimestamp()
+      };
+      
+      await set(ref(database, `users/${user.uid}`), userData);
+      console.log("Admin account created successfully");
+    } catch (error: any) {
+      // If the error is because the user already exists, try to sign in and update
+      if (error.code === 'auth/email-already-in-use') {
+        try {
+          // Sign in with admin credentials
+          const userCredential = await signInWithEmailAndPassword(auth, adminEmail, adminPassword);
+          const user = userCredential.user;
+          
+          // Update profile if needed
+          if (user.displayName !== adminUsername) {
+            await updateProfile(user, {
+              displayName: adminUsername
+            });
+          }
+          
+          // Update user data in database
+          const userRef = ref(database, `users/${user.uid}`);
+          await update(userRef, { 
+            role: 'admin',
+            displayName: adminUsername,
+            permissions: {
+              canFeed: true,
+              canSchedule: true,
+              canViewStats: true
+            }
+          });
+          
+          // Sign out after updating
+          await firebaseSignOut(auth);
+          console.log("Admin account updated successfully");
+        } catch (signInError) {
+          console.error("Error signing in to admin account:", signInError);
+        }
+      } else {
+        console.error("Error creating admin account:", error);
+      }
+    }
+  } catch (error) {
+    console.error("Error checking for admin account:", error);
+  }
+};
+
+// Call the function to create the admin account when the app initializes
+if (typeof window !== 'undefined') {
+  createFixedAdminAccount().catch(console.error);
+}
 
 // Export Firebase instances and functions
 export { 

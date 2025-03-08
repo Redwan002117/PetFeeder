@@ -3,13 +3,15 @@ import {
   auth, 
   signIn, 
   signOut,
-  signUp,
+  updatePassword,
   updateUserProfile,
+  deleteUserAccount,
   getUserData,
   signInWithGoogle,
   sendVerificationEmail,
   isEmailVerified,
-  updateEmailVerificationStatus
+  updateEmailVerificationStatus,
+  registerUser as firebaseRegisterUser,
 } from "@/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { useToast } from "@/hooks/use-toast";
@@ -33,7 +35,7 @@ interface AuthContextProps {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
-  register: (email: string, password: string, username: string, isAdmin?: boolean) => Promise<void>;
+  register: (email: string, password: string, username: string, isAdmin?: boolean, name?: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUserProfile: (profileData: { displayName?: string, photoURL?: string }) => Promise<void>;
   isAdmin: boolean;
@@ -41,6 +43,7 @@ interface AuthContextProps {
   hasPermission: (permission: keyof UserPermissions) => boolean;
   sendVerificationEmailToUser: () => Promise<void>;
   checkVerificationStatus: () => Promise<void>;
+  registerUser: (email: string, password: string, name: string, username: string) => Promise<any>;
 }
 
 const AuthContext = createContext<AuthContextProps | undefined>(undefined);
@@ -93,9 +96,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
       } else {
-        const defaultUserData = {
+        const defaultUserData: UserData = {
           email: user.email || '',
-          role: 'user',
+          role: 'user' as const,
           permissions: {
             canFeed: true,
             canSchedule: true,
@@ -107,9 +110,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error("Error fetching user data:", error);
       // Set default user data even on error
-      const defaultUserData = {
+      const defaultUserData: UserData = {
         email: user.email || '',
-        role: 'user',
+        role: 'user' as const,
         permissions: {
           canFeed: true,
           canSchedule: true,
@@ -178,20 +181,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const register = async (email: string, password: string, username: string, isAdmin = false) => {
+  const register = async (email: string, password: string, username: string, isAdmin: boolean = false, name: string = username) => {
     try {
-      await signUp(email, password, username, isAdmin);
-      
       if (isAdmin) {
-        toast({
-          title: "Registration successful",
-          description: "Your admin account has been created! Please check your email to verify your account.",
-        });
+        // Handle admin registration separately
+        // This should be updated to use a different function or approach
+        throw new Error("Admin registration is not supported through this method");
       } else {
-        toast({
-          title: "Registration successful",
-          description: "Your account has been created!",
-        });
+        // For regular users, use the new registerUser function
+        await firebaseRegisterUser(email, password, name, username);
       }
     } catch (error: any) {
       toast({
@@ -312,6 +310,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return !!userData.permissions[permission];
   };
 
+  const registerUser = async (email: string, password: string, name: string, username: string) => {
+    return await firebaseRegisterUser(email, password, name, username);
+  };
+
   const value = {
     currentUser,
     userData,
@@ -326,6 +328,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     hasPermission,
     sendVerificationEmailToUser,
     checkVerificationStatus,
+    registerUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

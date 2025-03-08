@@ -16,6 +16,7 @@ import Connectivity from "@/pages/Connectivity";
 import Profile from "@/pages/Profile";
 import AdminDashboard from "@/pages/AdminDashboard";
 import NotFound from "@/pages/NotFound";
+import UsernameSetup from "@/pages/UsernameSetup";
 import "./App.css";
 
 // Get the base URL from the environment or use a default
@@ -34,6 +35,7 @@ function App() {
                 <Route path="/register" element={<Register />} />
                 <Route path="/admin-register" element={<AdminRegister />} />
                 <Route path="/verify-email" element={<VerifyEmail />} />
+                <Route path="/username-setup" element={<UsernameSetup />} />
                 <Route
                   path="/"
                   element={

@@ -1,10 +1,18 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Shield } from "lucide-react";
+import { Label } from "@/components/ui/label";
+
+interface LocationState {
+  email: string;
+  password: string;
+  username: string;
+  name: string;
+}
 
 const AdminRegister = () => {
   const [email, setEmail] = useState("");
@@ -15,30 +23,61 @@ const AdminRegister = () => {
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
+  const [name, setName] = useState("");
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.state) {
+      const state = location.state as LocationState;
+      setEmail(state.email || '');
+      setPassword(state.password || '');
+      setUsername(state.username || '');
+      setName(state.name || '');
+    }
+  }, [location]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    setError("");
+
+    // Validate inputs
+    if (!email || !password || !confirmPassword || !username || !name) {
+      setError("All fields are required");
+      return;
+    }
+
     if (password !== confirmPassword) {
-      return setError("Passwords do not match");
+      setError("Passwords do not match");
+      return;
     }
-    
-    if (!username.trim()) {
-      return setError("Username is required");
+
+    if (username.length < 3) {
+      setError("Username must be at least 3 characters long");
+      return;
     }
-    
+
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      setError("Username can only contain letters, numbers, and underscores");
+      return;
+    }
+
+    if (!adminKey.trim()) {
+      setError("Admin key is required");
+      return;
+    }
+
+    if (adminKey !== ADMIN_KEY) {
+      setError("Invalid admin key");
+      return;
+    }
+
     try {
-      setError("");
       setLoading(true);
-      // Register as admin (isAdmin = true)
-      await register(email, password, username, true);
-      // Navigate to login page instead of dashboard since verification is required
-      navigate("/login", { 
-        state: { 
-          message: "Admin account created! Please check your email to verify your account before accessing admin features." 
-        } 
-      });
+      // Pass the name field to the register function
+      await register(email, password, username, true, name);
+      navigate("/login");
     } catch (error: any) {
+      console.error("Admin registration error:", error);
       setError(error.message || "Failed to create an admin account");
     } finally {
       setLoading(false);
@@ -118,6 +157,17 @@ const AdminRegister = () => {
                 placeholder="••••••••"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="name">Name</Label>
+              <Input
+                id="name"
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Enter your full name"
                 required
               />
             </div>
