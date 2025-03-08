@@ -9,7 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
 
 const Login = () => {
-  const [email, setEmail] = useState("");
+  const [emailOrUsername, setEmailOrUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -33,7 +33,7 @@ const Login = () => {
     try {
       setError("");
       setLoading(true);
-      await login(email, password);
+      await login(emailOrUsername, password);
       navigate("/");
     } catch (error: any) {
       setError(error.message || "Failed to sign in");
@@ -69,15 +69,15 @@ const Login = () => {
           )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-medium">
-                Email
+              <label htmlFor="emailOrUsername" className="text-sm font-medium">
+                Email or Username
               </label>
               <Input
-                id="email"
-                type="email"
-                placeholder="name@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="emailOrUsername"
+                type="text"
+                placeholder="name@example.com or username"
+                value={emailOrUsername}
+                onChange={(e) => setEmailOrUsername(e.target.value)}
                 required
               />
             </div>
@@ -99,7 +99,7 @@ const Login = () => {
               className="w-full"
               disabled={loading}
             >
-              {loading ? "Signing in..." : "Sign In with Email"}
+              {loading ? "Signing in..." : "Sign In"}
             </Button>
           </form>
 

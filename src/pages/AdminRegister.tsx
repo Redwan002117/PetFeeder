@@ -1,199 +1,198 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
+import React, { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Shield } from "lucide-react";
 import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useToast } from "@/hooks/use-toast";
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { getDatabase, ref, set } from 'firebase/database';
+import { auth } from '@/lib/firebase';
+import { validateAdminKey } from '@/config/adminKey';
+import { Eye, EyeOff, Shield } from 'lucide-react';
 
 interface LocationState {
   email: string;
   password: string;
-  username: string;
   name: string;
+  username: string;
 }
 
-const AdminRegister = () => {
-  const [email, setEmail] = useState("");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const { register } = useAuth();
-  const navigate = useNavigate();
-  const [name, setName] = useState("");
-  const location = useLocation();
+interface FirebaseError {
+  code: string;
+  message: string;
+}
 
-  useEffect(() => {
-    if (location.state) {
-      const state = location.state as LocationState;
-      setEmail(state.email || '');
-      setPassword(state.password || '');
-      setUsername(state.username || '');
-      setName(state.name || '');
-    }
-  }, [location]);
+export default function AdminRegister() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { toast } = useToast();
+  const state = location.state as LocationState;
+  const db = getDatabase();
+
+  const [adminKey, setAdminKey] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [showAdminKey, setShowAdminKey] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
-
-    // Validate inputs
-    if (!email || !password || !confirmPassword || !username || !name) {
-      setError("All fields are required");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
-      return;
-    }
-
-    if (username.length < 3) {
-      setError("Username must be at least 3 characters long");
-      return;
-    }
-
-    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-      setError("Username can only contain letters, numbers, and underscores");
-      return;
-    }
-
-    if (!adminKey.trim()) {
-      setError("Admin key is required");
-      return;
-    }
-
-    if (adminKey !== ADMIN_KEY) {
-      setError("Invalid admin key");
-      return;
-    }
+    setLoading(true);
 
     try {
-      setLoading(true);
-      // Pass the name field to the register function
-      await register(email, password, username, true, name);
-      navigate("/login");
-    } catch (error: any) {
-      console.error("Admin registration error:", error);
-      setError(error.message || "Failed to create an admin account");
+      // Validate admin key
+      if (!adminKey.trim()) {
+        throw new Error("Admin key is required");
+      }
+
+      if (!validateAdminKey(adminKey)) {
+        throw new Error("Invalid admin key");
+      }
+
+      if (!state?.email || !state?.password) {
+        throw new Error("Registration information is missing");
+      }
+
+      // Create user with email and password
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        state.email,
+        state.password
+      );
+
+      // Save additional user data to Realtime Database
+      await set(ref(db, `users/${userCredential.user.uid}`), {
+        email: state.email,
+        name: state.name,
+        username: state.username,
+        role: 'admin',
+        createdAt: new Date().toISOString(),
+      });
+
+      toast({
+        title: "Success",
+        description: "Admin account created successfully",
+      });
+
+      // Navigate to login
+      navigate('/login');
+    } catch (error) {
+      console.error('Admin registration error:', error);
+      const firebaseError = error as FirebaseError;
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: firebaseError.message || "Failed to create admin account",
+      });
     } finally {
       setLoading(false);
     }
   };
 
+  // If no state is passed, redirect to regular registration
+  if (!state?.email) {
+    navigate('/register');
+    return null;
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <div className="flex justify-center mb-4">
-            <div className="h-12 w-12 bg-primary rounded-full flex items-center justify-center">
-              <Shield className="text-white h-7 w-7" />
+    <div className="container mx-auto py-10">
+      <div className="flex justify-center">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <div className="flex items-center justify-center mb-4">
+              <Shield className="h-12 w-12 text-primary" />
             </div>
-          </div>
-          <CardTitle className="text-2xl text-center">Create Admin Account</CardTitle>
-          <CardDescription className="text-center">
-            This page allows direct registration of an admin account
-          </CardDescription>
-          <p className="text-center text-sm text-muted-foreground mt-1">
-            Email verification is required for admin accounts
-          </p>
-        </CardHeader>
-        <CardContent>
-          {error && (
-            <div className="bg-red-100 text-red-700 p-3 rounded-md mb-4">
-              {error}
-            </div>
-          )}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-medium">
-                Email
-              </label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="name@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="username" className="text-sm font-medium">
-                Username
-              </label>
-              <Input
-                id="username"
-                type="text"
-                placeholder="Choose a username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="password" className="text-sm font-medium">
-                Password
-              </label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="confirmPassword" className="text-sm font-medium">
-                Confirm Password
-              </label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                placeholder="••••••••"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
-              <Input
-                id="name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Enter your full name"
-                required
-              />
-            </div>
-            
-            <div className="bg-amber-50 p-4 rounded-md border border-amber-200">
-              <p className="text-amber-800 text-sm">
-                <strong>Warning:</strong> This page allows direct registration of an admin account.
-                In a production environment, this should be protected or removed.
-              </p>
-              <p className="text-amber-800 text-sm mt-2">
-                <strong>Note:</strong> You will need to verify your email address before accessing admin features.
-              </p>
-            </div>
-            
-            <Button 
-              type="submit"
-              className="w-full"
-              disabled={loading}
-            >
-              {loading ? "Creating Admin Account..." : "Create Admin Account"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+            <CardTitle className="text-2xl font-bold text-center">
+              Admin Registration
+            </CardTitle>
+            <CardDescription className="text-center">
+              Complete your admin account setup
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={state.email}
+                    disabled
+                    className="bg-gray-50"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="name">Name</Label>
+                  <Input
+                    id="name"
+                    type="text"
+                    value={state.name}
+                    disabled
+                    className="bg-gray-50"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="username">Username</Label>
+                  <Input
+                    id="username"
+                    type="text"
+                    value={state.username}
+                    disabled
+                    className="bg-gray-50"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="adminKey">Admin Key</Label>
+                  <div className="relative">
+                    <Input
+                      id="adminKey"
+                      type={showAdminKey ? "text" : "password"}
+                      value={adminKey}
+                      onChange={(e) => setAdminKey(e.target.value)}
+                      placeholder="Enter your admin key"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowAdminKey(!showAdminKey)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2"
+                    >
+                      {showAdminKey ? (
+                        <EyeOff className="h-4 w-4 text-gray-500" />
+                      ) : (
+                        <Eye className="h-4 w-4 text-gray-500" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={loading}
+              >
+                {loading ? "Creating Account..." : "Complete Registration"}
+              </Button>
+
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => navigate('/register')}
+                  className="text-sm text-gray-500 hover:text-gray-700"
+                >
+                  Back to regular registration
+                </button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
-};
-
-export default AdminRegister; 
+} 

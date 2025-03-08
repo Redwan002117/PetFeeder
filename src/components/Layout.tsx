@@ -1,6 +1,7 @@
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { User } from "firebase/auth";
 import Footer from "@/components/Footer";
 import { 
   LayoutDashboard, 
@@ -9,9 +10,10 @@ import {
   Utensils,
   Wifi, 
   LogOut,
-  User,
+  User as UserIcon,
   Menu,
-  Shield
+  Shield,
+  Settings
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import ProfileAvatar from "@/components/ProfileAvatar";
@@ -23,6 +25,17 @@ interface SidebarItemProps {
   to: string;
   active: boolean;
   onClick?: () => void;
+}
+
+interface NavigationItem {
+  icon: React.ReactNode;
+  text: string;
+  to: string;
+  hidden?: boolean;
+}
+
+interface ExtendedUser extends User {
+  deviceId?: string;
 }
 
 const SidebarItem: React.FC<SidebarItemProps> = ({ icon, text, to, active, onClick }) => {
@@ -47,6 +60,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const navigate = useNavigate();
   const { logout, isAdmin, currentUser } = useAuth();
   const [open, setOpen] = React.useState(false);
+  const user = currentUser as ExtendedUser;
 
   const handleLogout = async () => {
     try {
@@ -57,7 +71,8 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     }
   };
 
-  const sidebarItems = [
+  // Regular user navigation items
+  const regularItems: NavigationItem[] = [
     {
       icon: <LayoutDashboard size={20} />,
       text: "Dashboard",
@@ -84,52 +99,55 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       to: "/connectivity",
     },
     {
-      icon: <User size={20} />,
+      icon: <Settings size={20} />,
+      text: "Device Settings",
+      to: `/device/${user?.deviceId || ''}`,
+      hidden: !user?.deviceId,
+    },
+    {
+      icon: <UserIcon size={20} />,
       text: "Profile",
       to: "/profile",
     },
   ];
 
-  // Add admin dashboard link if user is admin
-  if (isAdmin) {
-    sidebarItems.push({
+  // Admin-only navigation items
+  const adminItems: NavigationItem[] = [
+    {
       icon: <Shield size={20} />,
-      text: "Admin",
+      text: "Admin Dashboard",
       to: "/admin",
-    });
-  }
+    }
+  ];
+
+  // Determine which items to show based on user role
+  const sidebarItems = isAdmin 
+    ? [...regularItems, ...adminItems] 
+    : regularItems;
+
+  // Filter out hidden items
+  const visibleItems = sidebarItems.filter(item => !item.hidden);
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
       {/* Mobile Header */}
-      <header className="md:hidden bg-white border-b border-gray-200 p-4 flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <div className="bg-pet-primary p-1 rounded-md">
-            <span className="text-white text-xl">🐱</span>
-          </div>
-          <span className="font-bold text-lg">PetFeeder</span>
-        </div>
+      <header className="md:hidden bg-white border-b border-gray-200 p-2 flex items-center justify-between">
         <div className="flex items-center">
-          <Link to="/profile" className="mr-3">
-            <ErrorBoundary>
-              <ProfileAvatar user={currentUser} size="sm" />
-            </ErrorBoundary>
-          </Link>
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
-              <button className="p-2">
-                <Menu size={24} />
+              <button className="p-1 mr-2 hover:bg-gray-100 rounded-md transition-colors">
+                <Menu size={20} />
               </button>
             </SheetTrigger>
             <SheetContent side="left" className="w-64 p-0">
-              <div className="p-4 flex items-center space-x-2 border-b">
+              <div className="p-3 flex items-center space-x-2 border-b">
                 <div className="bg-pet-primary p-1 rounded-md">
                   <span className="text-white text-xl">🐱</span>
                 </div>
-                <span className="font-bold text-lg">PetFeeder</span>
+                <span className="font-bold text-base">PetFeeder</span>
               </div>
-              <nav className="p-4 space-y-1">
-                {sidebarItems.map((item) => (
+              <nav className="p-3 space-y-1">
+                {visibleItems.map((item) => (
                   <SidebarItem
                     key={item.to}
                     icon={item.icon}
@@ -154,7 +172,18 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               </nav>
             </SheetContent>
           </Sheet>
+          <div className="flex items-center space-x-2">
+            <div className="bg-pet-primary p-1 rounded-md">
+              <span className="text-white text-sm">🐱</span>
+            </div>
+            <span className="font-bold text-sm">PetFeeder</span>
+          </div>
         </div>
+        <Link to="/profile">
+          <ErrorBoundary>
+            <ProfileAvatar user={currentUser} size="sm" className="w-8 h-8" />
+          </ErrorBoundary>
+        </Link>
       </header>
 
       <div className="flex flex-1">
@@ -174,7 +203,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             </Link>
           </div>
           <nav className="p-4 space-y-1">
-            {sidebarItems.map((item) => (
+            {visibleItems.map((item) => (
               <SidebarItem
                 key={item.to}
                 icon={item.icon}
@@ -197,7 +226,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
         {/* Main content */}
         <div className="flex-1 flex flex-col">
-          <main className="flex-1 overflow-auto p-4">
+          <main className="flex-1 overflow-auto p-3 md:p-4">
             {children}
           </main>
           <Footer />

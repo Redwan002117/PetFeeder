@@ -3,22 +3,129 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Auto Cat Feeder</title>
-    <meta name="description" content="Control your pet feeder remotely, set feeding schedules, and monitor your pet's feeding habits." />
-    <meta name="author" content="@GamerNo002117" />
+    <title>PetFeeder - Smart Pet Feeding Solution</title>
+    <meta name="description" content="Control your pet feeder remotely, set feeding schedules, and monitor your pet's feeding habits with PetFeeder." />
+    <meta name="author" content="PetFeeder" />
     <meta property="og:image" content="/og-image.png" />
     <meta name="theme-color" content="#4f46e5" />
+    <meta name="application-name" content="PetFeeder">
+    <meta name="apple-mobile-web-app-title" content="PetFeeder">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="version" content="1.0.0">
     
     <!-- Content Security Policy -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; 
-      script-src 'self' https://cdn.gpteng.co https://www.gstatic.com https://*.firebaseio.com https://*.firebasedatabase.app https://static.cloudflareinsights.com 'unsafe-inline' 'unsafe-eval'; 
-      script-src-elem 'self' https://cdn.gpteng.co https://www.gstatic.com https://*.firebaseio.com https://*.firebasedatabase.app https://static.cloudflareinsights.com 'unsafe-inline'; 
-      connect-src 'self' https://*.firebaseio.com https://*.googleapis.com https://*.firebasedatabase.app wss://*.firebaseio.com wss://*.firebasedatabase.app https://firebaseinstallations.googleapis.com https://lh3.googleusercontent.com https://firebasestorage.googleapis.com; 
+      script-src 'self' https://cdn.gpteng.co https://www.gstatic.com https://*.firebaseio.com https://*.firebasedatabase.app https://static.cloudflareinsights.com https://apis.google.com https://*.googleapis.com 'unsafe-inline' 'unsafe-eval'; 
+      script-src-elem 'self' https://cdn.gpteng.co https://www.gstatic.com https://*.firebaseio.com https://*.firebasedatabase.app https://static.cloudflareinsights.com https://apis.google.com https://*.googleapis.com 'unsafe-inline'; 
+      connect-src 'self' https://*.firebaseio.com https://*.googleapis.com https://*.firebasedatabase.app wss://*.firebaseio.com wss://*.firebasedatabase.app https://firebaseinstallations.googleapis.com https://lh3.googleusercontent.com https://firebasestorage.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com; 
       img-src 'self' data: https://*.googleapis.com https://*.gstatic.com https://lh3.googleusercontent.com https://firebasestorage.googleapis.com; 
-      style-src 'self' 'unsafe-inline'; 
+      style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; 
       font-src 'self' data: https://fonts.gstatic.com; 
-      frame-src 'self' https://*.firebaseapp.com https://*.firebasedatabase.app; 
+      frame-src 'self' https://*.firebaseapp.com https://*.firebasedatabase.app https://accounts.google.com https://apis.google.com; 
       object-src 'none';">
+    
+    <!-- App Loader Styles -->
+    <style>
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      
+      @keyframes slideUp {
+        from { transform: translateY(20px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+      }
+      
+      @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+        100% { transform: scale(1); }
+      }
+      
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      
+      .animate-fadeIn {
+        animation: fadeIn 0.5s ease-in-out;
+      }
+      
+      .animate-slideUp {
+        animation: slideUp 0.5s ease-out;
+      }
+      
+      .animate-pulse {
+        animation: pulse 2s infinite;
+      }
+      
+      .animate-spin {
+        animation: spin 1s linear infinite;
+      }
+      
+      #app-loader {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: #f9fafb;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        transition: opacity 0.5s ease-out;
+      }
+      
+      #app-loader.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      
+      #app-loader .logo {
+        width: 80px;
+        height: 80px;
+        background-color: #4f46e5;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 20px;
+        animation: pulse 2s infinite;
+      }
+      
+      #app-loader .logo span {
+        font-size: 40px;
+        color: white;
+      }
+      
+      #app-loader .spinner {
+        width: 40px;
+        height: 40px;
+        border: 3px solid rgba(79, 70, 229, 0.2);
+        border-radius: 50%;
+        border-top-color: #4f46e5;
+        animation: spin 1s linear infinite;
+        margin-bottom: 16px;
+      }
+      
+      #app-loader .text {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-size: 18px;
+        font-weight: 600;
+        color: #4f46e5;
+        margin-top: 16px;
+      }
+      
+      #app-loader .version {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-size: 12px;
+        color: #9ca3af;
+        margin-top: 8px;
+      }
+    </style>
     
     <!-- SPA Redirect Script (inline to avoid CSP issues) -->
     <script>
@@ -82,9 +189,27 @@
   </head>
 
   <body>
+    <!-- App Loader -->
+    <div id="app-loader">
+      <div class="logo">
+        <span>🐱</span>
+      </div>
+      <div class="spinner"></div>
+      <div class="text">PetFeeder</div>
+      <div class="version">v1.0.0</div>
+    </div>
+    
     <div id="root"></div>
-    <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS VERY COMMENT! -->
-    <script src="https://cdn.gpteng.co/gptengineer.js" type="module"></script>
+    
+    <script>
+      // Hide loader when app is loaded
+      window.addEventListener('load', function() {
+        setTimeout(function() {
+          document.getElementById('app-loader').classList.add('hidden');
+        }, 1000); // Show loader for at least 1 second
+      });
+    </script>
+    
     <script type="module" src="./src/main.tsx"></script>
   </body>
 </html>

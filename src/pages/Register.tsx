@@ -4,12 +4,15 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { HandPlatter, Shield, User } from "lucide-react";
+import { HandPlatter, Shield, User, Eye, EyeOff } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
 import { useToast } from "@/hooks/use-toast";
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
+import { validateAdminKey } from '@/config/adminKey';
 
 const Register = () => {
   const [email, setEmail] = useState("");
@@ -24,6 +27,8 @@ const Register = () => {
   const { registerUser } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // This is a simple admin key for demonstration purposes
   // In a real application, you would use a more secure method
@@ -33,7 +38,6 @@ const Register = () => {
     e.preventDefault();
     setError("");
 
-    // Validate inputs
     if (!email || !password || !confirmPassword || !username || !name) {
       setError("All fields are required");
       return;
@@ -54,7 +58,7 @@ const Register = () => {
       return;
     }
 
-    if (isAdmin && adminKey !== ADMIN_KEY) {
+    if (isAdmin && !validateAdminKey(adminKey)) {
       setError("Invalid admin key");
       return;
     }
@@ -76,7 +80,7 @@ const Register = () => {
       }
       
       // Register regular user
-      await registerUser(email, password, name, username);
+      await createUserWithEmailAndPassword(auth, email, password);
       
       toast({
         title: "Registration successful",
@@ -152,26 +156,52 @@ const Register = () => {
               
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Create a password"
-                  required
-                />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Create a password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4 text-gray-500" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-gray-500" />
+                    )}
+                  </button>
+                </div>
               </div>
               
               <div className="space-y-2">
                 <Label htmlFor="confirmPassword">Confirm Password</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Confirm your password"
-                  required
-                />
+                <div className="relative">
+                  <Input
+                    id="confirmPassword"
+                    type={showConfirmPassword ? "text" : "password"}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm your password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2"
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff className="h-4 w-4 text-gray-500" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-gray-500" />
+                    )}
+                  </button>
+                </div>
               </div>
               
               <div className="flex items-center space-x-2">
