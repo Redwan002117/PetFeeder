@@ -203,14 +203,20 @@ export const signInWithGoogle = async () => {
   }
 };
 
-export const signUp = async (email: string, password: string, isAdmin: boolean = false) => {
+export const signUp = async (email: string, password: string, username: string, isAdmin: boolean = false) => {
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
     
+    // Update the user profile with the username as displayName
+    await updateProfile(user, {
+      displayName: username
+    });
+    
     // Set user data in the database
     const userData = {
       role: isAdmin ? 'admin' : 'user',
+      username: username, // Store username in the database
       createdAt: new Date().toISOString(),
       emailVerified: false,
       permissions: {

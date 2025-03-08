@@ -8,6 +8,7 @@ import { Shield } from "lucide-react";
 
 const AdminRegister = () => {
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
@@ -22,11 +23,15 @@ const AdminRegister = () => {
       return setError("Passwords do not match");
     }
     
+    if (!username.trim()) {
+      return setError("Username is required");
+    }
+    
     try {
       setError("");
       setLoading(true);
       // Register as admin (isAdmin = true)
-      await register(email, password, true);
+      await register(email, password, username, true);
       // Navigate to login page instead of dashboard since verification is required
       navigate("/login", { 
         state: { 
@@ -74,6 +79,19 @@ const AdminRegister = () => {
                 placeholder="name@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="username" className="text-sm font-medium">
+                Username
+              </label>
+              <Input
+                id="username"
+                type="text"
+                placeholder="Choose a username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 required
               />
             </div>

@@ -12,6 +12,7 @@ import GoogleSignInButton from "@/components/GoogleSignInButton";
 
 const Register = () => {
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
@@ -36,10 +37,14 @@ const Register = () => {
       return setError("Invalid admin key");
     }
     
+    if (!username.trim()) {
+      return setError("Username is required");
+    }
+    
     try {
       setError("");
       setLoading(true);
-      await register(email, password, isAdmin);
+      await register(email, password, username, isAdmin);
       navigate("/");
     } catch (error: any) {
       setError(error.message || "Failed to create an account");
@@ -79,6 +84,19 @@ const Register = () => {
                 placeholder="name@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="username" className="text-sm font-medium">
+                Username
+              </label>
+              <Input
+                id="username"
+                type="text"
+                placeholder="Choose a username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 required
               />
             </div>

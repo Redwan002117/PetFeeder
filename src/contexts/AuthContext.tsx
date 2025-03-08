@@ -33,7 +33,7 @@ interface AuthContextProps {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
-  register: (email: string, password: string, isAdmin?: boolean) => Promise<void>;
+  register: (email: string, password: string, username: string, isAdmin?: boolean) => Promise<void>;
   logout: () => Promise<void>;
   updateUserProfile: (profileData: { displayName?: string, photoURL?: string }) => Promise<void>;
   isAdmin: boolean;
@@ -178,9 +178,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const register = async (email: string, password: string, isAdmin = false) => {
+  const register = async (email: string, password: string, username: string, isAdmin = false) => {
     try {
-      await signUp(email, password, isAdmin);
+      await signUp(email, password, username, isAdmin);
       
       if (isAdmin) {
         toast({
