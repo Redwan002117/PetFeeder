@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-// Remove the import for getProfilePictureUrl since we won't use it
-// import { getProfilePictureUrl } from "@/lib/firebase";
 import { User } from 'firebase/auth';
+import { Image, Transformation } from 'cloudinary-react';
+import { cloudinary } from '@/lib/cloudinary';
 
 interface ProfileAvatarProps {
   user: User | null;
@@ -18,6 +18,7 @@ const ProfileAvatar: React.FC<ProfileAvatarProps> = ({
   const [photoURL, setPhotoURL] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [useCloudinary, setUseCloudinary] = useState(false);
 
   // Size classes
   const sizeClasses = {
@@ -25,6 +26,14 @@ const ProfileAvatar: React.FC<ProfileAvatarProps> = ({
     md: 'h-12 w-12',
     lg: 'h-16 w-16',
     xl: 'h-24 w-24'
+  };
+
+  // Size values for Cloudinary transformations
+  const sizeValues = {
+    sm: 32,
+    md: 48,
+    lg: 64,
+    xl: 96
   };
 
   useEffect(() => {
@@ -37,16 +46,36 @@ const ProfileAvatar: React.FC<ProfileAvatarProps> = ({
       // If user has a photoURL from their auth provider (Google, etc.), use it
       if (user.photoURL) {
         setPhotoURL(user.photoURL);
+        setUseCloudinary(false);
       } else {
-        // Otherwise use a placeholder
-        setPhotoURL('/placeholder-avatar.svg');
+        // Try to use Cloudinary
+        try {
+          // This assumes you've uploaded the image to Cloudinary with a public_id
+          // that includes the user's ID, like 'profile_pictures/user_[userId]'
+          const cloudinaryUrl = cloudinary.url(`profile_pictures/user_${user.uid}`, {
+            width: sizeValues[size],
+            height: sizeValues[size],
+            crop: 'fill',
+            gravity: 'face',
+            fetch_format: 'auto',
+            quality: 'auto'
+          });
+          
+          setPhotoURL(cloudinaryUrl);
+          setUseCloudinary(true);
+        } catch (err) {
+          console.error("Error generating Cloudinary URL:", err);
+          // Fallback to placeholder
+          setPhotoURL('/placeholder-avatar.svg');
+          setUseCloudinary(false);
+        }
       }
       
       setLoading(false);
     };
 
     setProfilePicture();
-  }, [user]);
+  }, [user, size]);
 
   // Get initials from user's display name or email
   const getInitials = (): string => {
@@ -70,12 +99,26 @@ const ProfileAvatar: React.FC<ProfileAvatarProps> = ({
 
   return (
     <Avatar className={`${sizeClasses[size]} ${className}`}>
-      <AvatarImage 
-        src={photoURL || '/placeholder-avatar.svg'} 
-        alt="Profile" 
-        className={error ? 'opacity-0' : ''}
-        onError={() => setError(true)}
-      />
+      {useCloudinary && photoURL ? (
+        <div className="w-full h-full overflow-hidden rounded-full">
+          <Image 
+            cloudName={cloudinary.config().cloud_name}
+            publicId={`profile_pictures/user_${user?.uid}`}
+            className="w-full h-full object-cover"
+            onError={() => setError(true)}
+          >
+            <Transformation width={sizeValues[size]} height={sizeValues[size]} crop="fill" gravity="face" />
+            <Transformation fetchFormat="auto" quality="auto" />
+          </Image>
+        </div>
+      ) : (
+        <AvatarImage 
+          src={photoURL || '/placeholder-avatar.svg'} 
+          alt="Profile" 
+          className={error ? 'opacity-0' : ''}
+          onError={() => setError(true)}
+        />
+      )}
       <AvatarFallback>
         {loading ? (
           <div className="animate-pulse bg-gray-200 h-full w-full rounded-full" />

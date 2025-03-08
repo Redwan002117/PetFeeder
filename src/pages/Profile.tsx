@@ -14,6 +14,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import ProfileAvatar from "@/components/ProfileAvatar";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { getCloudinaryUploadUrl, getCloudinaryUploadSignature } from '@/lib/cloudinary';
 
 const Profile = () => {
   const { currentUser, updateUserProfile, userData, isAdmin, isVerifiedAdmin, sendVerificationEmailToUser, checkVerificationStatus } = useAuth();
@@ -28,16 +29,71 @@ const Profile = () => {
   const [uploadSuccess, setUploadSuccess] = useState(false);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Show a toast message explaining that profile picture uploads are disabled
-    toast({
-      title: "Feature unavailable",
-      description: "Profile picture uploads are currently disabled.",
-      variant: "destructive",
-    });
+    const file = e.target.files?.[0];
+    if (!file || !currentUser) return;
     
-    // Reset the file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+    if (!allowedTypes.includes(file.type)) {
+      toast({
+        title: "Invalid file type",
+        description: "Please upload a JPEG, PNG, or GIF image.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      toast({
+        title: "File too large",
+        description: "Please upload an image smaller than 5MB.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      
+      // Create a FormData object to send the file to Cloudinary
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', 'petfeeder_profile_pics'); // Create this preset in your Cloudinary dashboard
+      formData.append('public_id', `profile_pictures/user_${currentUser.uid}`);
+      
+      // Get the Cloudinary upload URL
+      const uploadUrl = getCloudinaryUploadUrl();
+      
+      // Upload the file to Cloudinary
+      const response = await fetch(uploadUrl, {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to upload image to Cloudinary');
+      }
+      
+      const data = await response.json();
+      
+      // Update user profile with new photo URL
+      await updateUserProfile({ photoURL: data.secure_url });
+      
+      setUploadSuccess(true);
+      setTimeout(() => setUploadSuccess(false), 3000);
+      
+      toast({
+        title: "Profile picture updated",
+        description: "Your profile picture has been updated successfully.",
+      });
+    } catch (error: any) {
+      console.error("Error uploading profile picture:", error);
+      toast({
+        title: "Upload failed",
+        description: error.message || "Failed to upload profile picture.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -148,7 +204,7 @@ const Profile = () => {
                       size="icon" 
                       className="absolute bottom-0 right-0 rounded-full bg-primary text-white h-8 w-8 p-1"
                       onClick={triggerFileInput}
-                      disabled={true}
+                      disabled={false}
                     >
                       <Pencil className="h-4 w-4" />
                     </Button>
@@ -179,10 +235,10 @@ const Profile = () => {
                       <Button 
                         className="w-full" 
                         onClick={triggerFileInput}
-                        disabled={true}
+                        disabled={loading}
                       >
                         <Upload className="mr-2 h-4 w-4" />
-                        Profile picture uploads disabled
+                        {loading ? "Uploading..." : "Upload new picture"}
                       </Button>
                       
                       {uploadSuccess && (
