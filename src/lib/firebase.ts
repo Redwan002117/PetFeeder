@@ -43,50 +43,35 @@ import { throttle } from 'lodash';
 // Environment detection
 const isDevelopment = import.meta.env.DEV || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
-// Check if ad blocker is active using a safer method
-const checkAdBlocker = async () => {
+// Simplified ad blocker detection
+let adBlockerDetected = false;
+
+// We'll set this to true by default to be safe
+// This way, if there are any issues with detection, we'll use the fallback methods
+setTimeout(() => {
   try {
     // Create a bait element that ad blockers typically target
     const bait = document.createElement('div');
-    bait.className = 'ad-placement ad-banner adsbox';
+    bait.className = 'ad-banner';
     bait.style.cssText = 'position: absolute; left: -999px; top: -999px; height: 1px; width: 1px;';
     document.body.appendChild(bait);
     
-    // Wait a moment for ad blockers to act
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
     // Check if the bait was hidden or removed by an ad blocker
-    const isBlocked = bait.offsetHeight === 0 || 
-                      bait.offsetParent === null || 
-                      !document.body.contains(bait);
+    adBlockerDetected = bait.offsetHeight === 0 || bait.offsetParent === null;
     
     // Clean up
     if (document.body.contains(bait)) {
       document.body.removeChild(bait);
     }
     
-    if (isBlocked) {
+    if (adBlockerDetected) {
       console.log('Ad blocker detected, using fallback methods');
     }
-    
-    return isBlocked;
   } catch (error) {
-    console.log('Error detecting ad blocker, assuming it is active');
-    return true;
+    console.log('Error in ad blocker detection, assuming it is active');
+    adBlockerDetected = true;
   }
-};
-
-// Initialize ad blocker detection
-let adBlockerDetected = false;
-checkAdBlocker().then(detected => {
-  adBlockerDetected = detected;
-  
-  // If ad blocker is detected, use alternative methods for analytics
-  if (adBlockerDetected) {
-    console.log('Using alternative methods for analytics due to ad blocker');
-    // Implement alternative analytics if needed
-  }
-});
+}, 500); // Delay to ensure the DOM is ready
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);

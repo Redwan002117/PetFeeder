@@ -10,10 +10,37 @@
     <meta name="theme-color" content="#4f46e5" />
     
     <!-- Content Security Policy -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.gpteng.co https://www.gstatic.com 'unsafe-inline' 'unsafe-eval'; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com wss://*.firebaseio.com https://firebaseinstallations.googleapis.com https://pagead2.googlesyndication.com; img-src 'self' data: https://*.googleapis.com https://*.gstatic.com; style-src 'self' 'unsafe-inline'; font-src 'self' data: https://fonts.gstatic.com; frame-src 'self' https://*.firebaseapp.com; object-src 'none';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.gpteng.co https://www.gstatic.com 'unsafe-inline' 'unsafe-eval'; script-src-elem 'self' https://cdn.gpteng.co https://www.gstatic.com 'unsafe-inline'; connect-src 'self' https://*.firebaseio.com https://*.googleapis.com wss://*.firebaseio.com https://firebaseinstallations.googleapis.com; img-src 'self' data: https://*.googleapis.com https://*.gstatic.com; style-src 'self' 'unsafe-inline'; font-src 'self' data: https://fonts.gstatic.com; frame-src 'self' https://*.firebaseapp.com; object-src 'none';">
     
-    <!-- SPA Redirect Script -->
-    <script src="/spa-redirect.js"></script>
+    <!-- SPA Redirect Script (inline to avoid CSP issues) -->
+    <script>
+      // Simple SPA redirect script for GitHub Pages
+      // No DOM manipulation, just URL handling
+      (function() {
+        // Skip on localhost
+        if (window.location.hostname === 'localhost' || 
+            window.location.hostname === '127.0.0.1') {
+          return;
+        }
+
+        // Get the current path
+        var path = window.location.pathname;
+        
+        // Handle direct navigation to routes
+        if (path !== '/' && 
+            !path.endsWith('.html') && 
+            !path.endsWith('.js') && 
+            !path.endsWith('.css') && 
+            !path.endsWith('.png') && 
+            !path.endsWith('.ico') && 
+            !path.endsWith('.svg') && 
+            !path.endsWith('/')) {
+          
+          // Add trailing slash to prevent 404s
+          window.location.replace(path + '/' + window.location.search + window.location.hash);
+        }
+      })();
+    </script>
     
     <!-- PWA support -->
     <link rel="manifest" href="/manifest.json" />
