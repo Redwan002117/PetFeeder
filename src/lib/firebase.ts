@@ -337,6 +337,11 @@ export const updateUserProfile = async (user: User, profileData: { displayName?:
 
 // Storage helper functions
 export const uploadProfilePicture = async (userId: string, file: File) => {
+  // Throw an error since Firebase Storage is not available
+  throw new Error("Profile picture uploads are not available. Firebase Storage is not configured.");
+  
+  // The original implementation is commented out below for reference
+  /*
   try {
     // Create a reference to the file location in Firebase Storage
     const profilePicRef = storageRef(storage, `users/${userId}/profilePicture`);
@@ -372,6 +377,7 @@ export const uploadProfilePicture = async (userId: string, file: File) => {
     
     throw error;
   }
+  */
 };
 
 export const getProfilePictureUrl = async (userId: string) => {

@@ -28,54 +28,16 @@ const Profile = () => {
   const [uploadSuccess, setUploadSuccess] = useState(false);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !currentUser) return;
+    // Show a toast message explaining that profile picture uploads are disabled
+    toast({
+      title: "Feature unavailable",
+      description: "Profile picture uploads are currently disabled.",
+      variant: "destructive",
+    });
     
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
-    if (!allowedTypes.includes(file.type)) {
-      toast({
-        title: "Invalid file type",
-        description: "Please upload a JPEG, PNG, or GIF image.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    if (file.size > 5 * 1024 * 1024) { // 5MB limit
-      toast({
-        title: "File too large",
-        description: "Please upload an image smaller than 5MB.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    try {
-      setLoading(true);
-      const photoURL = await uploadProfilePicture(currentUser.uid, file);
-      
-      // Update user profile with new photo URL
-      await updateUserProfile({ photoURL });
-      
-      // Clear any session storage CORS flags since we just successfully uploaded
-      sessionStorage.removeItem('firebase_storage_cors_issue');
-      
-      setUploadSuccess(true);
-      setTimeout(() => setUploadSuccess(false), 3000);
-      
-      toast({
-        title: "Profile picture updated",
-        description: "Your profile picture has been updated successfully.",
-      });
-    } catch (error: any) {
-      console.error("Error uploading profile picture:", error);
-      toast({
-        title: "Upload failed",
-        description: error.message || "Failed to upload profile picture.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
+    // Reset the file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -186,6 +148,7 @@ const Profile = () => {
                       size="icon" 
                       className="absolute bottom-0 right-0 rounded-full bg-primary text-white h-8 w-8 p-1"
                       onClick={triggerFileInput}
+                      disabled={true}
                     >
                       <Pencil className="h-4 w-4" />
                     </Button>
@@ -216,10 +179,10 @@ const Profile = () => {
                       <Button 
                         className="w-full" 
                         onClick={triggerFileInput}
-                        disabled={loading}
+                        disabled={true}
                       >
                         <Upload className="mr-2 h-4 w-4" />
-                        {loading ? "Uploading..." : "Upload new picture"}
+                        Profile picture uploads disabled
                       </Button>
                       
                       {uploadSuccess && (

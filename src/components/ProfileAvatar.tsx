@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { getProfilePictureUrl } from "@/lib/firebase";
+// Remove the import for getProfilePictureUrl since we won't use it
+// import { getProfilePictureUrl } from "@/lib/firebase";
 import { User } from 'firebase/auth';
 
 interface ProfileAvatarProps {
@@ -17,7 +18,6 @@ const ProfileAvatar: React.FC<ProfileAvatarProps> = ({
   const [photoURL, setPhotoURL] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
 
   // Size classes
   const sizeClasses = {
@@ -28,52 +28,25 @@ const ProfileAvatar: React.FC<ProfileAvatarProps> = ({
   };
 
   useEffect(() => {
-    const fetchProfilePicture = async () => {
-      if (!user?.uid) {
+    const setProfilePicture = () => {
+      if (!user) {
         setLoading(false);
         return;
       }
 
-      try {
-        setLoading(true);
-        setError(false);
-        
-        // First try to use the photoURL from the user object if available
-        if (user.photoURL) {
-          try {
-            // Test if the URL is accessible
-            const response = await fetch(user.photoURL, { method: 'HEAD' });
-            if (response.ok) {
-              setPhotoURL(user.photoURL);
-              setLoading(false);
-              return;
-            }
-          } catch (err) {
-            console.log("User photoURL not accessible, falling back to storage");
-          }
-        }
-        
-        // Otherwise fetch from Firebase Storage
-        const url = await getProfilePictureUrl(user.uid);
-        setPhotoURL(url);
-      } catch (err) {
-        console.error("Error loading profile picture:", err);
-        setError(true);
-        
-        // Retry with exponential backoff if we haven't reached max retries
-        if (retryCount < 2) {
-          const timeout = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
-          setTimeout(() => {
-            setRetryCount(prev => prev + 1);
-          }, timeout);
-        }
-      } finally {
-        setLoading(false);
+      // If user has a photoURL from their auth provider (Google, etc.), use it
+      if (user.photoURL) {
+        setPhotoURL(user.photoURL);
+      } else {
+        // Otherwise use a placeholder
+        setPhotoURL('/placeholder-avatar.svg');
       }
+      
+      setLoading(false);
     };
 
-    fetchProfilePicture();
-  }, [user, retryCount]);
+    setProfilePicture();
+  }, [user]);
 
   // Get initials from user's display name or email
   const getInitials = (): string => {
