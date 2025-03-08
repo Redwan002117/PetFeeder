@@ -1,69 +1,225 @@
-# Welcome to your Lovable project
+# Auto Cat Feeder
 
-## Project info
+A web application for controlling and monitoring your pet feeder remotely. Built with React, TypeScript, and Firebase.
 
-**URL**: https://lovable.dev/projects/63b29d1a-7536-407e-8225-b07d909fdfd9
+## Features
 
-## How can I edit this code?
+- User authentication and authorization
+- Feeding schedule management
+- Manual feeding control
+- Feeding history and statistics
+- Device connectivity management
+- Push notifications for feeding events
+- Responsive design for mobile and desktop
+- User profile management
 
-There are several ways of editing your application.
+## Getting Started
 
-**Use Lovable**
+### Prerequisites
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/63b29d1a-7536-407e-8225-b07d909fdfd9) and start prompting.
+- Node.js (v14 or higher)
+- npm or yarn
 
-Changes made via Lovable will be committed automatically to this repo.
+### Installation
 
-**Use your preferred IDE**
+1. Clone the repository
+2. Install dependencies:
+   ```
+   npm install
+   ```
+3. Start the development server:
+   ```
+   npm run dev
+   ```
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Firebase Storage CORS Configuration
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+If you're experiencing CORS issues with Firebase Storage (especially when uploading or retrieving profile pictures), you need to configure CORS for your Firebase Storage bucket.
 
-Follow these steps:
+See the [Firebase CORS Setup Guide](./FIREBASE_CORS_SETUP.md) for detailed instructions.
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+## Building for Production
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+```
+npm run build
 ```
 
-**Edit a file directly in GitHub**
+## Deployment Options
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+You can deploy this application using various hosting services. This project is specifically configured for GitHub Pages and Netlify.
 
-**Use GitHub Codespaces**
+### GitHub Pages Deployment
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+1. **Update the homepage in package.json**:
+   
+   Edit the `homepage` field in `package.json` to match your GitHub username and repository name:
+   ```json
+   "homepage": "https://yourusername.github.io/petfeeder-hub"
+   ```
 
-## What technologies are used for this project?
+2. **Deploy to GitHub Pages**:
+   ```bash
+   npm run deploy
+   ```
 
-This project is built with .
+   This will build your application and push it to the `gh-pages` branch of your repository.
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+3. **Configure GitHub Pages**:
+   - Go to your repository on GitHub
+   - Navigate to Settings > Pages
+   - Select the `gh-pages` branch as the source
+   - Click Save
 
-## How can I deploy this project?
+4. **Access your deployed application**:
+   Your application will be available at `https://yourusername.github.io/petfeeder-hub`
 
-Simply open [Lovable](https://lovable.dev/projects/63b29d1a-7536-407e-8225-b07d909fdfd9) and click on Share -> Publish.
+### Netlify Deployment
 
-## I want to use a custom domain - is that possible?
+1. **Create a Netlify account** if you don't have one: [Netlify Sign Up](https://app.netlify.com/signup)
 
-We don't support custom domains (yet). If you want to deploy your project under your own domain then we recommend using Netlify. Visit our docs for more details: [Custom domains](https://docs.lovable.dev/tips-tricks/custom-domain/)
+2. **Deploy via Netlify CLI**:
+   ```bash
+   # Install Netlify CLI
+   npm install -g netlify-cli
+   
+   # Login to Netlify
+   netlify login
+   
+   # Initialize Netlify in your project
+   netlify init
+   
+   # Deploy to Netlify
+   netlify deploy --prod
+   ```
+
+3. **Deploy via Netlify UI**:
+   - Go to [Netlify](https://app.netlify.com/)
+   - Click "New site from Git"
+   - Select your Git provider (GitHub, GitLab, or Bitbucket)
+   - Authorize Netlify to access your repositories
+   - Select your repository
+   - Configure build settings:
+     - Build command: `npm run build`
+     - Publish directory: `dist`
+   - Click "Deploy site"
+
+4. **Access your deployed application**:
+   Netlify will provide you with a URL like `https://your-site-name.netlify.app`
+
+## Firebase Database Paths for Arduino ESP32 Integration
+
+The application uses Firebase Realtime Database for storing and retrieving data. Here are the key database paths that your Arduino ESP32 device should interact with:
+
+### Device Status
+
+```
+/users/{userId}/deviceStatus
+```
+
+The device should update this path with its current status:
+
+```json
+{
+  "online": true,
+  "lastSeen": timestamp,
+  "foodLevel": 75, // percentage
+  "batteryLevel": 90, // percentage
+  "firmwareVersion": "1.0.0"
+}
+```
+
+### Feeding Schedule
+
+```
+/users/{userId}/feedingSchedule
+```
+
+The device should read this path to get the feeding schedule:
+
+```json
+{
+  "schedule1": {
+    "time": "08:00",
+    "amount": 25,
+    "enabled": true,
+    "days": {
+      "monday": true,
+      "tuesday": true,
+      "wednesday": true,
+      "thursday": true,
+      "friday": true,
+      "saturday": true,
+      "sunday": true
+    }
+  },
+  "schedule2": {
+    // Another schedule
+  }
+}
+```
+
+### Manual Feeding
+
+```
+/users/{userId}/manualFeed
+```
+
+The device should listen for changes on this path to trigger manual feeding:
+
+```json
+{
+  "timestamp": timestamp,
+  "amount": 20,
+  "status": "pending" // The device should update this to "completed" or "failed"
+}
+```
+
+### Feeding History
+
+```
+/users/{userId}/feedingHistory
+```
+
+The device should write to this path after each feeding event:
+
+```json
+{
+  "feeding1": {
+    "timestamp": timestamp,
+    "amount": 25,
+    "type": "scheduled", // or "manual"
+    "success": true
+  }
+}
+```
+
+### WiFi Credentials
+
+```
+/users/{userId}/wifiCredentials
+```
+
+The device can read this path to get WiFi credentials for connecting to a new network:
+
+```json
+{
+  "ssid": "NetworkName",
+  "password": "NetworkPassword",
+  "timestamp": timestamp
+}
+```
+
+## Security Considerations
+
+- The ESP32 device should use Firebase Authentication to securely access the database
+- Use Firebase Security Rules to restrict access to user data
+- Store sensitive information like WiFi passwords securely
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Contact
+
+Developer: [@GamerNo002117](https://redwancodes.com)
+Email: GamerNo002117@redwancodes.com

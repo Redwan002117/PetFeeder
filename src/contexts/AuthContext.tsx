@@ -1,15 +1,18 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { 
   auth, 
-  onAuthStateChanged, 
   signIn, 
-  signOut as firebaseSignOut, 
+  signOut,
   signUp,
   updateUserProfile,
-  getUserData
+  getUserData,
+  signInWithGoogle,
+  sendVerificationEmail,
+  isEmailVerified,
+  updateEmailVerificationStatus
 } from "@/lib/firebase";
+import { onAuthStateChanged, User } from "firebase/auth";
 import { useToast } from "@/hooks/use-toast";
-import { User } from "firebase/auth";
 
 interface UserPermissions {
   canFeed: boolean;
@@ -21,6 +24,7 @@ interface UserData {
   role: 'admin' | 'user';
   permissions: UserPermissions;
   email: string;
+  emailVerified?: boolean;
 }
 
 interface AuthContextProps {
@@ -28,11 +32,15 @@ interface AuthContextProps {
   userData: UserData | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
   register: (email: string, password: string, isAdmin?: boolean) => Promise<void>;
   logout: () => Promise<void>;
   updateUserProfile: (profileData: { displayName?: string, photoURL?: string }) => Promise<void>;
   isAdmin: boolean;
+  isVerifiedAdmin: boolean;
   hasPermission: (permission: keyof UserPermissions) => boolean;
+  sendVerificationEmailToUser: () => Promise<void>;
+  checkVerificationStatus: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextProps | undefined>(undefined);
@@ -49,13 +57,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isVerifiedAdmin, setIsVerifiedAdmin] = useState(false);
   const { toast } = useToast();
 
   const fetchUserData = async (user: User) => {
     try {
       const snapshot = await getUserData(user.uid);
       if (snapshot.exists()) {
-        setUserData(snapshot.val() as UserData);
+        const userData = snapshot.val() as UserData;
+        
+        // Ensure permissions object exists
+        if (!userData.permissions) {
+          userData.permissions = {
+            canFeed: true,
+            canSchedule: true,
+            canViewStats: true,
+          };
+        }
+        
+        // Ensure all required permissions exist
+        if (userData.permissions.canFeed === undefined) userData.permissions.canFeed = true;
+        if (userData.permissions.canSchedule === undefined) userData.permissions.canSchedule = true;
+        if (userData.permissions.canViewStats === undefined) userData.permissions.canViewStats = true;
+        
+        setUserData(userData);
+        
+        // Check if user is a verified admin
+        if (userData.role === 'admin') {
+          const isVerified = user.emailVerified;
+          setIsVerifiedAdmin(isVerified);
+          
+          // Update verification status in database if needed
+          if (isVerified && !userData.emailVerified) {
+            await updateEmailVerificationStatus(user.uid, true);
+          }
+        }
       } else {
         const defaultUserData = {
           email: user.email || '',
@@ -70,6 +106,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error) {
       console.error("Error fetching user data:", error);
+      // Set default user data even on error
+      const defaultUserData = {
+        email: user.email || '',
+        role: 'user',
+        permissions: {
+          canFeed: true,
+          canSchedule: true,
+          canViewStats: true,
+        }
+      };
+      setUserData(defaultUserData);
     }
   };
 
@@ -81,6 +128,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await fetchUserData(user);
       } else {
         setUserData(null);
+        setIsVerifiedAdmin(false);
       }
       
       setLoading(false);
@@ -106,13 +154,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const loginWithGoogle = async () => {
+    try {
+      await signInWithGoogle();
+      toast({
+        title: "Login successful",
+        description: "Welcome!",
+      });
+    } catch (error: any) {
+      // Use the user-friendly error message if available
+      const errorMessage = error.message || "Google login failed";
+      
+      toast({
+        title: "Google login failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
+      
+      // Log the error for debugging
+      console.error("Google login error:", error);
+      
+      throw error;
+    }
+  };
+
   const register = async (email: string, password: string, isAdmin = false) => {
     try {
       await signUp(email, password, isAdmin);
-      toast({
-        title: "Registration successful",
-        description: "Your account has been created!",
-      });
+      
+      if (isAdmin) {
+        toast({
+          title: "Registration successful",
+          description: "Your admin account has been created! Please check your email to verify your account.",
+        });
+      } else {
+        toast({
+          title: "Registration successful",
+          description: "Your account has been created!",
+        });
+      }
     } catch (error: any) {
       toast({
         title: "Registration failed",
@@ -125,7 +205,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
-      await firebaseSignOut();
+      await signOut();
       toast({
         title: "Logged out",
         description: "You have been logged out successfully.",
@@ -165,11 +245,70 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const sendVerificationEmailToUser = async () => {
+    try {
+      if (!currentUser) throw new Error("No user is logged in");
+      await sendVerificationEmail(currentUser);
+      toast({
+        title: "Verification email sent",
+        description: "Please check your email to verify your account.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Failed to send verification email",
+        description: error.message,
+        variant: "destructive",
+      });
+      throw error;
+    }
+  };
+
+  const checkVerificationStatus = async () => {
+    try {
+      if (!currentUser) return;
+      
+      // Reload user to get the latest emailVerified status
+      await currentUser.reload();
+      const updatedUser = auth.currentUser;
+      
+      if (updatedUser && updatedUser.emailVerified) {
+        setIsVerifiedAdmin(userData?.role === 'admin' && updatedUser.emailVerified);
+        
+        // Update verification status in database
+        if (userData?.role === 'admin') {
+          await updateEmailVerificationStatus(updatedUser.uid, true);
+        }
+        
+        toast({
+          title: "Email verified",
+          description: "Your email has been verified successfully.",
+        });
+      }
+    } catch (error: any) {
+      console.error("Error checking verification status:", error);
+    }
+  };
+
   const isAdmin = userData?.role === 'admin';
   
   const hasPermission = (permission: keyof UserPermissions) => {
+    // If no userData, return false
     if (!userData) return false;
-    if (isAdmin) return true;
+    
+    // Admins have all permissions, but only if verified for critical operations
+    if (isAdmin) {
+      // For critical permissions, require email verification
+      if (permission === 'canFeed' || permission === 'canSchedule') {
+        return isVerifiedAdmin;
+      }
+      // For non-critical permissions, allow even without verification
+      return true;
+    }
+    
+    // Check if permissions object exists
+    if (!userData.permissions) return false;
+    
+    // Check the specific permission
     return !!userData.permissions[permission];
   };
 
@@ -178,11 +317,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     userData,
     loading,
     login,
+    loginWithGoogle,
     register,
     logout,
     updateUserProfile: handleUpdateUserProfile,
     isAdmin,
+    isVerifiedAdmin,
     hasPermission,
+    sendVerificationEmailToUser,
+    checkVerificationStatus,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

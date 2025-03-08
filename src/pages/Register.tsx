@@ -1,45 +1,39 @@
-
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { HandPlatter } from "lucide-react";
+import { HandPlatter, Shield } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { getAllUsers } from "@/lib/firebase";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import GoogleSignInButton from "@/components/GoogleSignInButton";
 
 const Register = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminKey, setAdminKey] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [showAdminOption, setShowAdminOption] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const checkExistingUsers = async () => {
-      // This unsubscribe handle won't be called, but it's required by the function
-      getAllUsers((users) => {
-        // If there are no users yet, this is the first user, so they can be an admin
-        if (!users || Object.keys(users).length === 0) {
-          setShowAdminOption(true);
-          setIsAdmin(true); // First user should be admin by default
-        }
-      });
-    };
-
-    checkExistingUsers();
-  }, []);
+  // This is a simple admin key for demonstration purposes
+  // In a real application, you would use a more secure method
+  const ADMIN_KEY = "admin123";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (password !== confirmPassword) {
       return setError("Passwords do not match");
+    }
+    
+    if (isAdmin && adminKey !== ADMIN_KEY) {
+      return setError("Invalid admin key");
     }
     
     try {
@@ -65,7 +59,7 @@ const Register = () => {
           </div>
           <CardTitle className="text-2xl text-center">Create an Account</CardTitle>
           <CardDescription className="text-center">
-            Register to connect your pet feeder
+            Enter your details to create your pet feeder account
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -102,11 +96,11 @@ const Register = () => {
               />
             </div>
             <div className="space-y-2">
-              <label htmlFor="confirm-password" className="text-sm font-medium">
+              <label htmlFor="confirmPassword" className="text-sm font-medium">
                 Confirm Password
               </label>
               <Input
-                id="confirm-password"
+                id="confirmPassword"
                 type="password"
                 placeholder="••••••••"
                 value={confirmPassword}
@@ -115,19 +109,34 @@ const Register = () => {
               />
             </div>
             
-            {showAdminOption && (
-              <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="admin" 
-                  checked={isAdmin}
-                  onCheckedChange={(checked) => setIsAdmin(checked === true)}
-                />
-                <label
-                  htmlFor="admin"
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                >
-                  Register as administrator
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="isAdmin" 
+                checked={isAdmin}
+                onCheckedChange={(checked) => setIsAdmin(checked === true)}
+              />
+              <Label htmlFor="isAdmin" className="flex items-center">
+                <Shield className="h-4 w-4 mr-1 text-muted-foreground" />
+                Register as Admin
+              </Label>
+            </div>
+            
+            {isAdmin && (
+              <div className="space-y-2">
+                <label htmlFor="adminKey" className="text-sm font-medium">
+                  Admin Key
                 </label>
+                <Input
+                  id="adminKey"
+                  type="password"
+                  placeholder="Enter admin key"
+                  value={adminKey}
+                  onChange={(e) => setAdminKey(e.target.value)}
+                  required
+                />
+                <p className="text-xs text-muted-foreground">
+                  For demonstration purposes, the admin key is: "admin123"
+                </p>
               </div>
             )}
             
@@ -139,6 +148,19 @@ const Register = () => {
               {loading ? "Creating Account..." : "Create Account"}
             </Button>
           </form>
+
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">
+                Or continue with
+              </span>
+            </div>
+          </div>
+
+          <GoogleSignInButton mode="signup" />
         </CardContent>
         <CardFooter className="flex justify-center">
           <p className="text-sm text-gray-500">
