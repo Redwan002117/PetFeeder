@@ -98,7 +98,7 @@ const ProfileAvatar: React.FC<ProfileAvatarProps> = ({
   return (
     <Avatar className={`${sizeClasses[size]} ${className}`}>
       <AvatarImage 
-        src={photoURL || '/PetFeeder/placeholder-avatar.svg'} 
+        src={photoURL || '/placeholder-avatar.svg'} 
         alt="Profile" 
         className={error ? 'opacity-0' : ''}
         onError={() => setError(true)}

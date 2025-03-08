@@ -305,7 +305,7 @@ export const getProfilePictureUrl = async (userId: string) => {
     // This is stored in sessionStorage to persist during the session but not permanently
     const hasCorsIssue = sessionStorage.getItem('firebase_storage_cors_issue') === 'true';
     if (isDevelopment && hasCorsIssue) {
-      return '/PetFeeder/placeholder-avatar.svg';
+      return '/placeholder-avatar.svg';
     }
     
     // Try to get the profile picture
@@ -348,14 +348,14 @@ export const getProfilePictureUrl = async (userId: string) => {
       sessionStorage.setItem('firebase_storage_cors_issue', 'true');
       
       // Return a placeholder image URL instead
-      return '/PetFeeder/placeholder-avatar.svg';
+      return '/placeholder-avatar.svg';
     } else if (error.code === 'storage/object-not-found') {
       // No profile picture exists, return placeholder
-      return '/PetFeeder/placeholder-avatar.svg';
+      return '/placeholder-avatar.svg';
     } else {
       console.error("Error fetching profile picture:", error);
       // Return placeholder for any other error
-      return '/PetFeeder/placeholder-avatar.svg';
+      return '/placeholder-avatar.svg';
     }
   }
 };
