@@ -43,6 +43,36 @@ import { throttle } from 'lodash';
 // Environment detection
 const isDevelopment = import.meta.env.DEV || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
+// Check if ad blocker is active
+const checkAdBlocker = async () => {
+  try {
+    // Try to fetch a known ad-related URL
+    const response = await fetch('https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js', {
+      method: 'HEAD',
+      mode: 'no-cors'
+    });
+    
+    // If we get here, ad blocker is likely not active
+    return false;
+  } catch (error) {
+    // If fetch fails, ad blocker might be active
+    console.log('Ad blocker might be active, using fallback methods');
+    return true;
+  }
+};
+
+// Initialize ad blocker detection
+let adBlockerDetected = false;
+checkAdBlocker().then(detected => {
+  adBlockerDetected = detected;
+  
+  // If ad blocker is detected, use alternative methods for analytics
+  if (adBlockerDetected) {
+    console.log('Using alternative methods for analytics due to ad blocker');
+    // Implement alternative analytics if needed
+  }
+});
+
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -66,9 +96,19 @@ let messaging: any = null;
 // Only initialize in browser environment, not in service worker
 if (typeof window !== 'undefined') {
   try {
-    messaging = getMessaging(app);
+    // Import messaging dynamically to avoid issues with ad blockers
+    import('firebase/messaging').then(({ getMessaging }) => {
+      if (!adBlockerDetected) {
+        messaging = getMessaging(app);
+        console.log('Firebase messaging initialized successfully');
+      } else {
+        console.log('Skipping Firebase messaging initialization due to ad blocker');
+      }
+    }).catch(error => {
+      console.error('Error initializing Firebase messaging:', error);
+    });
   } catch (error) {
-    console.error("Failed to initialize Firebase messaging:", error);
+    console.error('Error importing Firebase messaging:', error);
   }
 }
 
@@ -470,31 +510,39 @@ export const deleteUserAccount = async (user: User, password: string) => {
 
 // Push notification functions
 export const requestNotificationPermission = async () => {
-  if (!messaging) return null;
+  if (adBlockerDetected) {
+    console.log('Skipping notification permission request due to ad blocker');
+    return null;
+  }
+  
+  if (!messaging) {
+    console.error("Firebase messaging is not initialized");
+    return null;
+  }
   
   try {
-    // Check if notifications are supported
-    if (!('Notification' in window)) {
-      console.error('This browser does not support notifications');
-      return null;
+    // Check if notification permission is already granted
+    if (Notification.permission === 'granted') {
+      // Get token
+      return await getToken(messaging, { 
+        vapidKey: 'BLBz-RwVqRGXtUwVr9O7a_nLLvTJxRqwHd2JEZc-oM5xz1LJLrcBLgL0q7xQZKyjKT0Kn9AOdkHk3x_yEeBVlSo' 
+      });
     }
     
+    // Request permission
     const permission = await Notification.requestPermission();
+    
     if (permission === 'granted') {
-      try {
-        // Get the token
-        const token = await getToken(messaging, {
-          vapidKey: 'BLBz-RwVqRGXtUwVr9O7a_nLLvTJxRqwHd2JEZc-oM5xz1LJLrcBLgL0q7xQZKyjKT0Kn9AOdkHk3x_yEeBVlSo'
-        });
-        return token;
-      } catch (tokenError) {
-        console.error('Error getting token:', tokenError);
-        return null;
-      }
+      // Get token
+      return await getToken(messaging, { 
+        vapidKey: 'BLBz-RwVqRGXtUwVr9O7a_nLLvTJxRqwHd2JEZc-oM5xz1LJLrcBLgL0q7xQZKyjKT0Kn9AOdkHk3x_yEeBVlSo' 
+      });
+    } else {
+      console.log('Notification permission denied');
+      return null;
     }
-    return null;
   } catch (error) {
-    console.error('An error occurred while requesting notification permission:', error);
+    console.error("Error requesting notification permission:", error);
     return null;
   }
 };
