@@ -21,27 +21,23 @@ export default defineConfig(({ mode }) => ({
     },
   },
   build: {
-    outDir: "dist",
+    outDir: 'dist',
     sourcemap: mode !== "production",
     rollupOptions: {
-      external: [
-        'firebase',
-        'firebase/app',
-        'firebase/auth',
-        'firebase/database',
-        'firebase/firestore',
-        'firebase/storage',
-        'firebase/messaging',
-      ],
       output: {
-        globals: {
-          firebase: 'firebase',
-          'firebase/app': 'firebase.app',
-          'firebase/auth': 'firebase.auth',
-          'firebase/database': 'firebase.database',
-          'firebase/firestore': 'firebase.firestore',
-          'firebase/storage': 'firebase.storage',
-          'firebase/messaging': 'firebase.messaging',
+        manualChunks: {
+          vendor: [
+            'react', 
+            'react-dom', 
+            'react-router-dom',
+          ],
+          firebase: [
+            'firebase/app',
+            'firebase/auth',
+            'firebase/database',
+            'firebase/storage',
+            'firebase/messaging',
+          ],
         },
       },
     },

@@ -2,18 +2,18 @@
   "name": "Auto Cat Feeder",
   "short_name": "PetFeeder",
   "description": "Control your pet feeder remotely, set feeding schedules, and monitor your pet's feeding habits.",
-  "start_url": "/",
+  "start_url": "/PetFeeder/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#4f46e5",
   "icons": [
     {
-      "src": "/favicon.ico",
+      "src": "/PetFeeder/favicon.ico",
       "sizes": "64x64",
       "type": "image/x-icon"
     },
     {
-      "src": "/og-image.png",
+      "src": "/PetFeeder/og-image.png",
       "sizes": "512x512",
       "type": "image/png"
     }
