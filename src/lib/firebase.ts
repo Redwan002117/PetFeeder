@@ -1,5 +1,5 @@
+import { initializeApp } from "firebase/app";
 import { 
-  initializeApp, 
   getAuth, 
   getDatabase, 
   getStorage, 
@@ -9,22 +9,22 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
+  sendEmailVerification as firebaseSendEmailVerification,
   onAuthStateChanged,
-  User,
-  updatePassword as firebaseUpdatePassword,
-  EmailAuthProvider,
-  reauthenticateWithCredential,
-  updateProfile,
   GoogleAuthProvider,
   signInWithPopup,
-  sendEmailVerification as firebaseSendEmailVerification,
-  applyActionCode,
-  verifyBeforeUpdateEmail
+  User,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword as firebaseUpdatePassword,
+  updateProfile,
+  applyActionCode
 } from "firebase/auth";
 import { 
   ref, 
   set, 
   onValue, 
+  off, 
   push, 
   update, 
   remove,
