@@ -220,6 +220,12 @@ export const updateData = async (path: string, data: any) => {
 
 export const getData = async (path: string) => {
   try {
+    // Apply rate limiting if needed
+    const rateLimitKey = `getData_${path}`;
+    if (rateLimiter && !rateLimiter.checkLimit(rateLimitKey)) {
+      throw new Error("Rate limit exceeded. Please try again later.");
+    }
+    
     const snapshot = await get(ref(database, path));
     // Check if snapshot exists using the proper method for Realtime Database
     return snapshot.exists ? snapshot.val() : null;
