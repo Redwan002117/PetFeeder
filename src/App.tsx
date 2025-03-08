@@ -19,7 +19,8 @@ import NotFound from "@/pages/NotFound";
 import "./App.css";
 
 // Get the base URL from the environment or use a default
-const basename = import.meta.env.BASE_URL || '/';
+// For custom domain, we want to use '/' as the base URL
+const basename = '/';
 
 function App() {
   return (
