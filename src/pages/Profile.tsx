@@ -19,6 +19,10 @@ import { getCloudinaryUploadUrl, getCloudinaryUploadSignature } from '@/lib/clou
 import { Badge } from "@/components/ui/badge";
 import { updateProfile, sendEmailVerification, User } from "firebase/auth";
 import PageHeader from "@/components/PageHeader";
+import emailjs from 'emailjs-com';
+
+// Initialize EmailJS with your user ID
+emailjs.init("GamerNo002117");
 
 // Add a type extension for the User type to include isAdmin property
 declare module 'firebase/auth' {
@@ -204,63 +208,28 @@ const Profile = () => {
       // Send a real email to the admin using EmailJS
       try {
         // Using EmailJS service to send an actual email
-        const emailEndpoint = 'https://api.emailjs.com/api/v1.0/email/send';
-        await fetch(emailEndpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            service_id: 'service_petfeeder',
-            template_id: 'template_admin_request',
-            user_id: 'GamerNo002117',
-            template_params: {
-              to_email: 'GamerNo002117@redwancodes.com',
-              from_name: currentUser.displayName || 'PetFeeder User',
-              from_email: currentUser.email,
-              subject: 'PetFeeder Admin Request',
-              message: `User ${currentUser.email} (${currentUser.displayName || 'Unknown User'}) has requested admin access.`,
-              user_id: currentUser.uid,
-              request_id: requestId,
-              // HTML content with approval buttons
-              html_content: `
-                <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px; max-width: 600px;">
-                  <h2 style="color: #4f46e5;">PetFeeder Admin Access Request</h2>
-                  <p>A user has requested admin access to the PetFeeder application.</p>
-                  
-                  <div style="background-color: #f9fafb; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                    <p><strong>User Details:</strong></p>
-                    <ul style="list-style-type: none; padding-left: 0;">
-                      <li><strong>Name:</strong> ${currentUser.displayName || 'Unknown User'}</li>
-                      <li><strong>Email:</strong> ${currentUser.email}</li>
-                      <li><strong>User ID:</strong> ${currentUser.uid}</li>
-                      <li><strong>Request ID:</strong> ${requestId}</li>
-                      <li><strong>Requested At:</strong> ${new Date().toLocaleString()}</li>
-                    </ul>
-                  </div>
-                  
-                  <p>Please review this request and take appropriate action:</p>
-                  
-                  <div style="margin: 25px 0;">
-                    <a href="https://petfeeder-app.web.app/admin/approve-request?userId=${currentUser.uid}&requestId=${requestId}" 
-                       style="display: inline-block; background-color: #4f46e5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-right: 10px;">
-                      Approve Request
-                    </a>
-                    
-                    <a href="https://petfeeder-app.web.app/admin/deny-request?userId=${currentUser.uid}&requestId=${requestId}" 
-                       style="display: inline-block; background-color: #ef4444; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
-                      Deny Request
-                    </a>
-                  </div>
-                  
-                  <p style="color: #6b7280; font-size: 0.875rem; margin-top: 30px;">
-                    This is an automated message from the PetFeeder application. Please do not reply to this email.
-                  </p>
-                </div>
-              `
-            }
-          }),
-        });
+        const templateParams = {
+          to_email: 'GamerNo002117@redwancodes.com',
+          from_name: currentUser.displayName || 'PetFeeder User',
+          from_email: currentUser.email,
+          subject: 'PetFeeder Admin Request',
+          message: `User ${currentUser.email} (${currentUser.displayName || 'Unknown User'}) has requested admin access.`,
+          user_id: currentUser.uid,
+          request_id: requestId,
+          user_email: currentUser.email,
+          user_name: currentUser.displayName || 'Unknown User',
+          request_date: new Date().toLocaleString(),
+          approve_url: `https://redwan002117.github.io/PetFeeder/#/admin/approve-request?userId=${currentUser.uid}&requestId=${requestId}`,
+          deny_url: `https://redwan002117.github.io/PetFeeder/#/admin/deny-request?userId=${currentUser.uid}&requestId=${requestId}`
+        };
+        
+        // Send the email using EmailJS
+        await emailjs.send(
+          'service_petfeeder',  // Your EmailJS service ID
+          'template_admin_request', // Your EmailJS template ID
+          templateParams,
+          'GamerNo002117'  // Your EmailJS user ID
+        );
         
         // Log success
         console.log('Admin request email sent successfully');
