@@ -19,10 +19,7 @@ import { getCloudinaryUploadUrl, getCloudinaryUploadSignature } from '@/lib/clou
 import { Badge } from "@/components/ui/badge";
 import { updateProfile, sendEmailVerification, User } from "firebase/auth";
 import PageHeader from "@/components/PageHeader";
-import emailjs from '@emailjs/browser';
-
-// Initialize EmailJS with your public key
-emailjs.init("x1XhJjylYSZBit1Yv");
+import { sendEmail } from '@/lib/email-service';
 
 // Add a type extension for the User type to include isAdmin property
 declare module 'firebase/auth' {
@@ -205,31 +202,20 @@ const Profile = () => {
       // Generate a unique request ID
       const requestId = `req_${Date.now()}`;
       
-      // Send a real email to the admin using EmailJS
+      // Send a real email to the admin using our email service
       try {
-        // Using EmailJS service to send an actual email
-        const templateParams = {
-          to_email: 'GamerNo002117@redwancodes.com',
+        // Prepare email parameters
+        const emailResult = await sendEmail({
+          to: 'GamerNo002117@redwancodes.com',
           from_name: currentUser.displayName || 'PetFeeder User',
-          from_email: currentUser.email,
+          from_email: currentUser.email || 'noreply@petfeeder.redwancodes.com',
           subject: 'PetFeeder Admin Request',
           message: `User ${currentUser.email} (${currentUser.displayName || 'Unknown User'}) has requested admin access.`,
           user_id: currentUser.uid,
           request_id: requestId,
-          user_email: currentUser.email,
-          user_name: currentUser.displayName || 'Unknown User',
-          request_date: new Date().toLocaleString(),
           approve_url: `https://petfeeder.redwancodes.com/admin/approve-request?userId=${currentUser.uid}&requestId=${requestId}`,
           deny_url: `https://petfeeder.redwancodes.com/admin/deny-request?userId=${currentUser.uid}&requestId=${requestId}`
-        };
-        
-        // Send the email using EmailJS
-        await emailjs.send(
-          'service_petfeeder',  // Replace with your actual service ID
-          'template_admin_request', // Replace with your actual template ID
-          templateParams,
-          'x1XhJjylYSZBit1Yv'  // Your public key
-        );
+        });
         
         // Log success
         console.log('Admin request email sent successfully');

@@ -11,6 +11,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { name: 'Dashboard', path: '/', icon: '📊' },
+  { name: 'Pet Profiles', path: '/pets', icon: '🐾' },
   { name: 'Feeding Schedule', path: '/schedule', icon: '🕒' },
   { name: 'Food Levels', path: '/food-levels', icon: '📈' },
   { name: 'Device Settings', path: '/settings', icon: '⚙️' },

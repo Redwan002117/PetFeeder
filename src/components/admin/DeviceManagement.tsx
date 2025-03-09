@@ -431,8 +431,8 @@ export const DeviceManagement: React.FC = () => {
               <SelectItem value="maintenance">Maintenance</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        
+      </div>
+
         <div className="flex gap-2">
           <Button
             variant="outline"
@@ -453,7 +453,7 @@ export const DeviceManagement: React.FC = () => {
           </Button>
         </div>
       </div>
-      
+
       {selectedDevice ? (
         <div className="space-y-6">
           <div className="flex justify-between items-center">
@@ -488,11 +488,11 @@ export const DeviceManagement: React.FC = () => {
                 <div>
                   <p className="text-sm font-medium text-gray-500">Last Seen</p>
                   <p>{formatLastSeen(selectedDevice.lastSeen)}</p>
-                </div>
+                    </div>
                 <div>
                   <p className="text-sm font-medium text-gray-500">Location</p>
                   <p>{selectedDevice.location || 'Not specified'}</p>
-                </div>
+                    </div>
               </CardContent>
             </Card>
             
@@ -507,7 +507,7 @@ export const DeviceManagement: React.FC = () => {
                     <p className="text-sm font-medium">{selectedDevice.foodLevel}%</p>
                   </div>
                   <Progress value={selectedDevice.foodLevel} className="h-2" />
-                </div>
+                  </div>
                 
                 {selectedDevice.batteryLevel !== undefined && (
                   <div>
@@ -803,7 +803,7 @@ export const DeviceManagement: React.FC = () => {
                 className="w-full min-h-[100px] p-2 border rounded-md"
               />
             </div>
-          </div>
+      </div>
           
           <DialogFooter>
             <Button variant="outline" onClick={() => setMaintenanceDialogOpen(false)}>

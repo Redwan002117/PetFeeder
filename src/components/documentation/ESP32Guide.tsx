@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/accordion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Menu, Cpu, Wifi, Settings, RefreshCw, AlertTriangle, Wrench } from "lucide-react";
+import { Menu, Cpu, Wifi, Settings, RefreshCw, AlertTriangle, Wrench, Database, Code, Server } from "lucide-react";
 
 export function ESP32Guide() {
   const [activeSection, setActiveSection] = useState<string | null>(null);
@@ -82,6 +82,30 @@ export function ESP32Guide() {
           >
             <Wrench className="mr-2 h-4 w-4" />
             Maintenance
+          </Button>
+          <Button 
+            variant="ghost" 
+            className={`w-full justify-start ${activeSection === 'firebase-integration' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => scrollToSection('firebase-integration')}
+          >
+            <Database className="mr-2 h-4 w-4" />
+            Firebase Integration
+          </Button>
+          <Button 
+            variant="ghost" 
+            className={`w-full justify-start ${activeSection === 'code-explanation' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => scrollToSection('code-explanation')}
+          >
+            <Code className="mr-2 h-4 w-4" />
+            Code Explanation
+          </Button>
+          <Button 
+            variant="ghost" 
+            className={`w-full justify-start ${activeSection === 'real-time-sync' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => scrollToSection('real-time-sync')}
+          >
+            <Server className="mr-2 h-4 w-4" />
+            Real-time Synchronization
           </Button>
         </nav>
       </div>
@@ -249,6 +273,189 @@ export function ESP32Guide() {
                 <p className="text-sm text-blue-800">
                   Tip: Always backup your settings before updating firmware.
                   Settings are stored in EEPROM and should persist through updates.
+                </p>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        <AccordionItem value="firebase-integration" id="firebase-integration">
+          <AccordionTrigger>Firebase Integration</AccordionTrigger>
+          <AccordionContent>
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Firebase Configuration</h3>
+              <p>
+                The PetFeeder device uses Firebase Realtime Database to store and sync data in real-time.
+                This allows for seamless communication between the device and the web application.
+              </p>
+              
+              <h4 className="text-md font-semibold mt-4">Setup Steps</h4>
+              <ol className="list-decimal list-inside space-y-2">
+                <li>Create a Firebase project in the Firebase Console</li>
+                <li>Set up Realtime Database with appropriate security rules</li>
+                <li>Update the firmware with your Firebase credentials:
+                  <pre className="bg-gray-100 dark:bg-gray-800 p-3 rounded-md mt-2 overflow-x-auto text-sm">
+                    <code>
+                      #define FIREBASE_HOST "your-project-id.firebaseio.com"<br/>
+                      #define FIREBASE_AUTH "your-database-secret"
+                    </code>
+                  </pre>
+                </li>
+              </ol>
+
+              <h4 className="text-md font-semibold mt-4">Database Structure</h4>
+              <p>The Firebase database is organized as follows:</p>
+              <pre className="bg-gray-100 dark:bg-gray-800 p-3 rounded-md mt-2 overflow-x-auto text-sm">
+                <code>
+                  /devices/{'{deviceID}'} - Device information<br/>
+                  &nbsp;&nbsp;/status - Online/offline status<br/>
+                  &nbsp;&nbsp;/foodLevel - Current food level percentage<br/>
+                  &nbsp;&nbsp;/lastSeen - Timestamp of last connection<br/>
+                  &nbsp;&nbsp;/feedCommand - Pending feed commands<br/>
+                  &nbsp;&nbsp;/schedules - Feeding schedules<br/>
+                  &nbsp;&nbsp;/feedingHistory - Record of feeding events<br/>
+                  &nbsp;&nbsp;/alerts - System alerts and notifications
+                </code>
+              </pre>
+
+              <div className="bg-blue-50 p-4 rounded-md mt-4">
+                <p className="text-sm text-blue-800">
+                  Note: The device automatically registers itself in the database on first connection using its MAC address as the deviceID.
+                </p>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        <AccordionItem value="code-explanation" id="code-explanation">
+          <AccordionTrigger>Code Explanation</AccordionTrigger>
+          <AccordionContent>
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Main Components</h3>
+              <p>
+                The PetFeeder firmware is organized into several functional components:
+              </p>
+              
+              <h4 className="text-md font-semibold mt-4">Setup Functions</h4>
+              <ul className="list-disc list-inside space-y-2">
+                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">setupHardware()</code> - Initializes pins and servo</li>
+                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">setupWiFi()</code> - Configures WiFi using WiFiManager</li>
+                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">setupFirebase()</code> - Initializes Firebase connection</li>
+                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">setupNTP()</code> - Sets up time synchronization</li>
+                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">registerDevice()</code> - Registers device in Firebase</li>
+              </ul>
+
+              <h4 className="text-md font-semibold mt-4">Core Functions</h4>
+              <ul className="list-disc list-inside space-y-2">
+                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">feed(int amount)</code> - Controls the feeding mechanism</li>
+                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">updateFoodLevel()</code> - Reads and updates food level</li>
+                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">checkSchedules()</code> - Manages feeding schedules</li>
+                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">handleManualFeedButton()</code> - Processes physical button presses</li>
+                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">checkForManualFeedCommand()</code> - Checks for remote feed commands</li>
+              </ul>
+
+              <h4 className="text-md font-semibold mt-4">Operation Modes</h4>
+              <ul className="list-disc list-inside space-y-2">
+                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">handleOnlineOperations()</code> - Functions when connected to WiFi</li>
+                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">handleLocalOperations()</code> - Functions in offline mode</li>
+                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">checkWiFiStatus()</code> - Monitors connection and attempts reconnection</li>
+              </ul>
+
+              <h4 className="text-md font-semibold mt-4">Key Variables</h4>
+              <pre className="bg-gray-100 dark:bg-gray-800 p-3 rounded-md mt-2 overflow-x-auto text-sm">
+                <code>
+                  // Pin definitions<br/>
+                  #define SERVO_PIN 13<br/>
+                  #define FOOD_LEVEL_SENSOR_PIN 34<br/>
+                  #define LED_PIN 2<br/>
+                  #define MANUAL_FEED_PIN 4<br/>
+                  <br/>
+                  // Feeding amounts (in milliseconds)<br/>
+                  const int SMALL_AMOUNT = 500;<br/>
+                  const int MEDIUM_AMOUNT = 1000;<br/>
+                  const int LARGE_AMOUNT = 1500;
+                </code>
+              </pre>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        <AccordionItem value="real-time-sync" id="real-time-sync">
+          <AccordionTrigger>Real-time Synchronization</AccordionTrigger>
+          <AccordionContent>
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Firebase Real-time Updates</h3>
+              <p>
+                The PetFeeder device maintains real-time synchronization with the Firebase database,
+                allowing for immediate updates and responses to user actions.
+              </p>
+              
+              <h4 className="text-md font-semibold mt-4">Key Synchronization Features</h4>
+              <ul className="list-disc list-inside space-y-2">
+                <li><strong>Device Status Updates</strong> - The device regularly updates its online status and last seen timestamp</li>
+                <li><strong>Food Level Monitoring</strong> - Real-time updates of food level percentage</li>
+                <li><strong>Remote Feeding Commands</strong> - Immediate response to feed commands from the web app</li>
+                <li><strong>Schedule Synchronization</strong> - Automatic download of updated feeding schedules</li>
+                <li><strong>Feeding History</strong> - Logs of all feeding events, both manual and scheduled</li>
+                <li><strong>Alert System</strong> - Notifications for low food level and other system events</li>
+              </ul>
+
+              <h4 className="text-md font-semibold mt-4">Offline Operation</h4>
+              <p>
+                The device is designed to continue functioning even when WiFi is unavailable:
+              </p>
+              <ul className="list-disc list-inside space-y-2">
+                <li>Schedules are stored in EEPROM and continue to execute</li>
+                <li>Manual feeding via physical button remains operational</li>
+                <li>Local web interface becomes available in AP mode</li>
+                <li>Automatic reconnection attempts when WiFi becomes available</li>
+                <li>Data synchronization resumes upon reconnection</li>
+              </ul>
+
+              <div className="bg-green-50 p-4 rounded-md mt-4">
+                <p className="text-sm text-green-800">
+                  Best Practice: The device uses a heartbeat system to maintain connection status. If the device hasn't updated its heartbeat in 15 minutes, the web app will show it as offline.
+                </p>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        <AccordionItem value="advanced-features" id="advanced-features">
+          <AccordionTrigger>Advanced Features</AccordionTrigger>
+          <AccordionContent>
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Enhanced Capabilities</h3>
+              <p>
+                The PetFeeder firmware includes several advanced features for improved reliability and user experience:
+              </p>
+              
+              <h4 className="text-md font-semibold mt-4">WiFi Management</h4>
+              <ul className="list-disc list-inside space-y-2">
+                <li>WiFiManager for easy network configuration</li>
+                <li>Automatic fallback to AP mode when WiFi is unavailable</li>
+                <li>Support for multiple network configurations</li>
+                <li>Intelligent reconnection with exponential backoff</li>
+              </ul>
+
+              <h4 className="text-md font-semibold mt-4">Error Handling</h4>
+              <ul className="list-disc list-inside space-y-2">
+                <li>Robust error detection and recovery</li>
+                <li>Exception handling for Firebase operations</li>
+                <li>Watchdog timer to prevent system hangs</li>
+                <li>Visual feedback via LED status indicators</li>
+              </ul>
+
+              <h4 className="text-md font-semibold mt-4">Power Management</h4>
+              <ul className="list-disc list-inside space-y-2">
+                <li>Efficient operation to minimize power consumption</li>
+                <li>Safe shutdown procedures during power loss</li>
+                <li>State persistence across power cycles</li>
+              </ul>
+
+              <div className="bg-purple-50 p-4 rounded-md mt-4">
+                <p className="text-sm text-purple-800">
+                  Advanced Tip: The firmware supports OTA (Over-The-Air) updates when properly configured, allowing for remote firmware upgrades without physical access to the device.
                 </p>
               </div>
             </div>

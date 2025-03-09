@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Home, Calendar, Bell, Settings, History, PieChart, Lock, Share, Menu } from "lucide-react";
+import { Home, Calendar, Bell, Settings, History, PieChart, Lock, Share, Menu, PawPrint } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export const UserGuide = () => {
@@ -53,6 +53,14 @@ export const UserGuide = () => {
           >
             <PieChart className="mr-2 h-4 w-4" />
             Dashboard
+          </Button>
+          <Button 
+            variant="ghost" 
+            className={`w-full justify-start ${activeSection === 'pet-profiles' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => scrollToSection('pet-profiles')}
+          >
+            <PawPrint className="mr-2 h-4 w-4" />
+            Pet Profiles
           </Button>
           <Button 
             variant="ghost" 
@@ -627,6 +635,67 @@ export const UserGuide = () => {
               <p className="text-sm text-red-800">
                 Warning: Never use water to clean electronic components.
                 Always unplug the device before cleaning.
+              </p>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        <AccordionItem value="pet-profiles" id="pet-profiles">
+          <AccordionTrigger className="text-lg font-medium">
+            <div className="flex items-center">
+              <PawPrint className="mr-2 h-5 w-5" />
+              <span>Pet Profiles</span>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="space-y-4">
+            <h3 className="text-lg font-semibold">Managing Pet Profiles</h3>
+            <p>
+              The Pet Profiles feature allows you to create and manage profiles for each of your pets,
+              helping you customize feeding schedules and track nutrition for multiple animals.
+            </p>
+            
+            <h4 className="text-md font-semibold mt-4">Creating a Pet Profile</h4>
+            <ol className="list-decimal list-inside space-y-2">
+              <li>Navigate to the Pet Profiles page</li>
+              <li>Click "Add Pet" button</li>
+              <li>Fill in your pet's details:
+                <ul className="list-disc list-inside ml-6">
+                  <li>Name (required)</li>
+                  <li>Type (cat, dog, etc.)</li>
+                  <li>Breed</li>
+                  <li>Age and weight</li>
+                  <li>Upload a photo (optional)</li>
+                </ul>
+              </li>
+              <li>Add feeding preferences:
+                <ul className="list-disc list-inside ml-6">
+                  <li>Food type</li>
+                  <li>Portion size</li>
+                  <li>Feeding schedule</li>
+                  <li>Special dietary notes</li>
+                </ul>
+              </li>
+              <li>Click "Add Pet" to save the profile</li>
+            </ol>
+
+            <h4 className="text-md font-semibold mt-4">Managing Feeding Schedules</h4>
+            <ul className="list-disc list-inside space-y-2">
+              <li>Each pet can have its own feeding schedule</li>
+              <li>Customize portion sizes based on pet's needs</li>
+              <li>Track feeding history per pet</li>
+              <li>Receive notifications specific to each pet</li>
+            </ul>
+
+            <h4 className="text-md font-semibold mt-4">Editing and Deleting Profiles</h4>
+            <ul className="list-disc list-inside space-y-2">
+              <li>Click the edit icon on a pet card to update information</li>
+              <li>Use the delete button to remove a pet profile</li>
+              <li>Changes to profiles are saved automatically</li>
+            </ul>
+
+            <div className="bg-blue-50 p-4 rounded-md mt-4">
+              <p className="text-sm text-blue-800">
+                Tip: Create separate profiles for each pet to better track their individual feeding habits and nutritional needs.
               </p>
             </div>
           </AccordionContent>
