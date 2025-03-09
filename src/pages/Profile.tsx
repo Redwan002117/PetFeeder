@@ -19,10 +19,10 @@ import { getCloudinaryUploadUrl, getCloudinaryUploadSignature } from '@/lib/clou
 import { Badge } from "@/components/ui/badge";
 import { updateProfile, sendEmailVerification, User } from "firebase/auth";
 import PageHeader from "@/components/PageHeader";
-import emailjs from 'emailjs-com';
+import emailjs from '@emailjs/browser';
 
-// Initialize EmailJS with your user ID
-emailjs.init("GamerNo002117");
+// Initialize EmailJS with your public key
+emailjs.init("x1XhJjylYSZBit1Yv");
 
 // Add a type extension for the User type to include isAdmin property
 declare module 'firebase/auth' {
@@ -225,10 +225,10 @@ const Profile = () => {
         
         // Send the email using EmailJS
         await emailjs.send(
-          'service_petfeeder',  // Your EmailJS service ID
-          'template_admin_request', // Your EmailJS template ID
+          'service_petfeeder',  // Replace with your actual service ID
+          'template_admin_request', // Replace with your actual template ID
           templateParams,
-          'GamerNo002117'  // Your EmailJS user ID
+          'x1XhJjylYSZBit1Yv'  // Your public key
         );
         
         // Log success
