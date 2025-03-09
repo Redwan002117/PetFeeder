@@ -1,19 +1,46 @@
-import React, { useEffect, useState } from 'react';
-import { collection, getDocs, updateDoc, doc, deleteDoc } from 'firebase/firestore';
-import { db } from '../../config/firebase';
-import { toast } from 'react-hot-toast';
+import React, { useState, useEffect } from 'react';
+import { database, ref, get, update } from '@/lib/firebase';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Loader2, Search, Edit, Trash2, Shield, User, CheckCircle } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
 
-interface User {
+interface UserData {
   id: string;
   email: string;
-  role: string;
-  lastLogin: string;
-  devices: string[];
+  displayName: string;
+  role: 'admin' | 'user';
+  createdAt: number;
+  lastLogin?: number;
+  permissions: {
+    canFeed: boolean;
+    canSchedule: boolean;
+    canViewStats: boolean;
+  };
 }
 
 export const UserManagement: React.FC = () => {
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [editingUser, setEditingUser] = useState<UserData | null>(null);
+  const [editPermissions, setEditPermissions] = useState<{
+    canFeed: boolean;
+    canSchedule: boolean;
+    canViewStats: boolean;
+  }>({
+    canFeed: true,
+    canSchedule: true,
+    canViewStats: true
+  });
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<UserData | null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     fetchUsers();
@@ -21,117 +48,304 @@ export const UserManagement: React.FC = () => {
 
   const fetchUsers = async () => {
     try {
-      const usersSnapshot = await getDocs(collection(db, 'users'));
-      const usersData = usersSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as User[];
-      setUsers(usersData);
+      setLoading(true);
+      
+      // Fetch users from Firebase Realtime Database
+      const usersRef = ref(database, 'users');
+      const usersSnapshot = await get(usersRef);
+      
+      if (!usersSnapshot.exists()) {
+        setUsers([]);
+        setLoading(false);
+        return;
+      }
+      
+      const usersData = usersSnapshot.val();
+      
+      // Convert to array
+      const usersArray = Object.entries(usersData || {}).map(([id, data]: [string, any]) => ({
+        id,
+        ...data,
+        createdAt: data.createdAt || 0,
+        lastLogin: data.lastLogin || 0,
+        permissions: {
+          canFeed: data.permissions?.canFeed ?? true,
+          canSchedule: data.permissions?.canSchedule ?? true,
+          canViewStats: data.permissions?.canViewStats ?? true
+        }
+      }));
+      
+      // Sort users by name
+      usersArray.sort((a, b) => a.displayName.localeCompare(b.displayName));
+      
+      setUsers(usersArray);
     } catch (error) {
-      toast.error('Failed to fetch users');
       console.error('Error fetching users:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load users. Please try again later.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const updateUserRole = async (userId: string, newRole: string) => {
+  const handleEditUser = (user: UserData) => {
+    setEditingUser(user);
+    setEditPermissions(user.permissions);
+  };
+
+  const handleSaveUser = async () => {
+    if (!editingUser) return;
+    
     try {
-      await updateDoc(doc(db, 'users', userId), {
-        role: newRole
+      // Update user in Firebase Realtime Database
+      const userRef = ref(database, `users/${editingUser.id}`);
+      await update(userRef, {
+        permissions: editPermissions
       });
-      toast.success('User role updated successfully');
-      fetchUsers();
+      
+      // Update local state
+      setUsers(users.map(user => 
+        user.id === editingUser.id 
+          ? { ...user, permissions: editPermissions } 
+          : user
+      ));
+      
+      toast({
+        title: "User Updated",
+        description: "User permissions have been updated successfully.",
+        variant: "default",
+      });
+      
+      setEditingUser(null);
     } catch (error) {
-      toast.error('Failed to update user role');
-      console.error('Error updating user role:', error);
+      console.error('Error updating user:', error);
+      toast({
+        title: "Update Failed",
+        description: "Failed to update user permissions. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
-  const deleteUser = async (userId: string) => {
-    if (!window.confirm('Are you sure you want to delete this user?')) return;
+  const handleDeleteClick = (user: UserData) => {
+    setUserToDelete(user);
+    setDeleteDialogOpen(true);
+  };
 
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
+    
     try {
-      await deleteDoc(doc(db, 'users', userId));
-      toast.success('User deleted successfully');
-      fetchUsers();
+      // Delete user from Firebase Realtime Database
+      const userRef = ref(database, `users/${userToDelete.id}`);
+      await update(userRef, null);
+      
+      // Update local state
+      setUsers(users.filter(user => user.id !== userToDelete.id));
+      
+      toast({
+        title: "User Deleted",
+        description: "User has been deleted successfully.",
+        variant: "default",
+      });
+      
+      setDeleteDialogOpen(false);
+      setUserToDelete(null);
     } catch (error) {
-      toast.error('Failed to delete user');
       console.error('Error deleting user:', error);
+      toast({
+        title: "Delete Failed",
+        description: "Failed to delete user. Please try again.",
+        variant: "destructive",
+      });
     }
+  };
+
+  // Filter users based on search term
+  const filteredUsers = users.filter(user => {
+    const searchTermLower = searchTerm.toLowerCase();
+    return (
+      user.displayName.toLowerCase().includes(searchTermLower) ||
+      user.email.toLowerCase().includes(searchTermLower)
+    );
+  });
+
+  const getRoleBadge = (role: string) => {
+    switch (role) {
+      case 'admin':
+        return <Badge className="flex items-center gap-1 bg-purple-500"><Shield className="h-3 w-3" /> Admin</Badge>;
+      case 'user':
+      default:
+        return <Badge variant="secondary" className="flex items-center gap-1"><User className="h-3 w-3" /> User</Badge>;
+    }
+  };
+
+  const formatDate = (timestamp: number) => {
+    if (!timestamp) return 'Never';
+    
+    const date = new Date(timestamp);
+    return date.toLocaleDateString();
   };
 
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500"></div>
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="bg-white shadow rounded-lg">
-      <div className="px-4 py-5 sm:px-6">
-        <h2 className="text-lg font-medium text-gray-900">User Management</h2>
-        <p className="mt-1 text-sm text-gray-500">Manage user roles and access</p>
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+        <div className="relative w-full md:w-64">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Input
+            type="text"
+            placeholder="Search users..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+        
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={fetchUsers}
+        >
+          Refresh
+        </Button>
       </div>
       
-      <div className="border-t border-gray-200">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Email
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Role
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Last Login
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Devices
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {users.map((user) => (
-              <tr key={user.id}>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {user.email}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <select
-                    value={user.role}
-                    onChange={(e) => updateUserRole(user.id, e.target.value)}
-                    className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-                  >
-                    <option value="user">User</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {new Date(user.lastLogin).toLocaleDateString()}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {user.devices?.length || 0} devices
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <button
-                    onClick={() => deleteUser(user.id)}
-                    className="text-red-600 hover:text-red-900"
-                  >
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>User Management</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {filteredUsers.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <User className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+              <p>No users found.</p>
+              {searchTerm && <p className="text-sm mt-2">Try changing your search criteria.</p>}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead>Last Login</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredUsers.map((user) => (
+                    <TableRow key={user.id}>
+                      <TableCell className="font-medium">{user.displayName}</TableCell>
+                      <TableCell>{user.email}</TableCell>
+                      <TableCell>{getRoleBadge(user.role)}</TableCell>
+                      <TableCell>{formatDate(user.createdAt)}</TableCell>
+                      <TableCell>{formatDate(user.lastLogin)}</TableCell>
+                      <TableCell>
+                        <div className="flex space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEditUser(user)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteClick(user)}
+                            disabled={user.role === 'admin'}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      
+      {/* Edit User Dialog */}
+      {editingUser && (
+        <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit User Permissions</DialogTitle>
+              <DialogDescription>
+                Update permissions for {editingUser.displayName}. Click save when you're done.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <label className="text-sm font-medium">Can Feed</label>
+                  <p className="text-xs text-muted-foreground">Allow user to manually feed pets</p>
+                </div>
+                <Switch
+                  checked={editPermissions.canFeed}
+                  onCheckedChange={(checked) => setEditPermissions({...editPermissions, canFeed: checked})}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <label className="text-sm font-medium">Can Schedule</label>
+                  <p className="text-xs text-muted-foreground">Allow user to create feeding schedules</p>
+                </div>
+                <Switch
+                  checked={editPermissions.canSchedule}
+                  onCheckedChange={(checked) => setEditPermissions({...editPermissions, canSchedule: checked})}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <label className="text-sm font-medium">Can View Stats</label>
+                  <p className="text-xs text-muted-foreground">Allow user to view feeding statistics</p>
+                </div>
+                <Switch
+                  checked={editPermissions.canViewStats}
+                  onCheckedChange={(checked) => setEditPermissions({...editPermissions, canViewStats: checked})}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditingUser(null)}>Cancel</Button>
+              <Button onClick={handleSaveUser}>Save Changes</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+      
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Deletion</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete the user "{userToDelete?.displayName}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDeleteUser}>Delete User</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }; 

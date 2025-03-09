@@ -3,6 +3,7 @@ import { Toaster } from 'react-hot-toast';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
 import Dashboard from './pages/Dashboard';
 import Profile from './pages/Profile';
 import Schedule from './pages/Schedule';
@@ -49,6 +50,7 @@ export function App() {
                   <Route path="/" element={<Home />} />
                   <Route path="/login" element={<Login />} />
                   <Route path="/register" element={<Register />} />
+                  <Route path="/forgot-password" element={<ForgotPassword />} />
                   <Route path="/documentation" element={<Documentation />} />
                   <Route path="/verify-email" element={<VerifyEmail />} />
                   <Route path="/username-setup" element={<UsernameSetup />} />

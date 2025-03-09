@@ -1,28 +1,34 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, orderBy, limit, getDocs, where, Timestamp } from 'firebase/firestore';
-import { db } from '../../config/firebase';
-import { toast } from 'react-hot-toast';
+import { database, ref, get } from '@/lib/firebase';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Loader2, Search, AlertTriangle, Info, CheckCircle } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
 
 interface LogEntry {
   id: string;
-  timestamp: Timestamp;
+  timestamp: number;
   level: 'info' | 'warning' | 'error';
   message: string;
   source: string;
   userId?: string;
   deviceId?: string;
-  metadata?: Record<string, any>;
+  details?: string;
 }
 
 export const SystemLogs: React.FC = () => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'info' | 'warning' | 'error'>('all');
-  const [timeRange, setTimeRange] = useState<'1h' | '24h' | '7d' | '30d'>('24h');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [timeRange, setTimeRange] = useState<'24h' | '7d' | '30d'>('24h');
+  const { toast } = useToast();
 
   useEffect(() => {
     fetchLogs();
-  }, [filter, timeRange]);
+  }, [timeRange]);
 
   const fetchLogs = async () => {
     try {
@@ -32,9 +38,6 @@ export const SystemLogs: React.FC = () => {
       const now = new Date();
       let startTime = new Date();
       switch (timeRange) {
-        case '1h':
-          startTime.setHours(now.getHours() - 1);
-          break;
         case '24h':
           startTime.setDate(now.getDate() - 1);
           break;
@@ -45,155 +48,190 @@ export const SystemLogs: React.FC = () => {
           startTime.setDate(now.getDate() - 30);
           break;
       }
-
-      let baseQuery = query(
-        collection(db, 'system_logs'),
-        where('timestamp', '>=', Timestamp.fromDate(startTime)),
-        orderBy('timestamp', 'desc'),
-        limit(100)
-      );
-
-      if (filter !== 'all') {
-        baseQuery = query(
-          baseQuery,
-          where('level', '==', filter)
-        );
+      
+      // Fetch logs from Firebase Realtime Database
+      const logsRef = ref(database, 'logs');
+      const logsSnapshot = await get(logsRef);
+      
+      if (!logsSnapshot.exists()) {
+        setLogs([]);
+        setLoading(false);
+        return;
       }
-
-      const logsSnapshot = await getDocs(baseQuery);
-      const logsData = logsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as LogEntry[];
-
-      setLogs(logsData);
+      
+      const logsData = logsSnapshot.val();
+      
+      // Convert to array and filter by time range
+      const logsArray = Object.entries(logsData || {}).map(([id, data]: [string, any]) => ({
+        id,
+        ...data,
+        timestamp: data.timestamp || 0
+      }));
+      
+      // Filter logs by time range
+      const filteredLogs = logsArray.filter(log => 
+        log.timestamp >= startTime.getTime()
+      );
+      
+      // Sort logs by timestamp (newest first)
+      filteredLogs.sort((a, b) => b.timestamp - a.timestamp);
+      
+      setLogs(filteredLogs);
     } catch (error) {
-      toast.error('Failed to fetch system logs');
       console.error('Error fetching logs:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load system logs. Please try again later.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const getLevelColor = (level: string) => {
+  // Filter logs based on search term
+  const filteredLogs = logs.filter(log => {
+    const searchTermLower = searchTerm.toLowerCase();
+    return (
+      log.message.toLowerCase().includes(searchTermLower) ||
+      log.source.toLowerCase().includes(searchTermLower) ||
+      (log.details && log.details.toLowerCase().includes(searchTermLower)) ||
+      (log.userId && log.userId.toLowerCase().includes(searchTermLower)) ||
+      (log.deviceId && log.deviceId.toLowerCase().includes(searchTermLower))
+    );
+  });
+
+  const getLevelBadge = (level: string) => {
     switch (level) {
-      case 'info':
-        return 'bg-blue-100 text-blue-800';
-      case 'warning':
-        return 'bg-yellow-100 text-yellow-800';
       case 'error':
-        return 'bg-red-100 text-red-800';
+        return <Badge variant="destructive" className="flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Error</Badge>;
+      case 'warning':
+        return <Badge variant="secondary" className="flex items-center gap-1 bg-yellow-500 text-white"><AlertTriangle className="h-3 w-3" /> Warning</Badge>;
+      case 'info':
       default:
-        return 'bg-gray-100 text-gray-800';
+        return <Badge variant="outline" className="flex items-center gap-1"><Info className="h-3 w-3" /> Info</Badge>;
     }
   };
 
-  const formatTimestamp = (timestamp: Timestamp) => {
-    return new Date(timestamp.seconds * 1000).toLocaleString();
+  const formatTimestamp = (timestamp: number) => {
+    return new Date(timestamp).toLocaleString();
   };
 
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500"></div>
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="bg-white shadow rounded-lg">
-      <div className="px-4 py-5 sm:px-6">
-        <h2 className="text-lg font-medium text-gray-900">System Logs</h2>
-        <p className="mt-1 text-sm text-gray-500">Monitor system activity and events</p>
-      </div>
-
-      <div className="px-4 py-3 border-b border-gray-200 sm:px-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
-          <div className="flex items-center space-x-4">
-            <select
-              value={filter}
-              onChange={(e) => setFilter(e.target.value as any)}
-              className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-            >
-              <option value="all">All Levels</option>
-              <option value="info">Info</option>
-              <option value="warning">Warning</option>
-              <option value="error">Error</option>
-            </select>
-
-            <select
-              value={timeRange}
-              onChange={(e) => setTimeRange(e.target.value as any)}
-              className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-            >
-              <option value="1h">Last Hour</option>
-              <option value="24h">Last 24 Hours</option>
-              <option value="7d">Last 7 Days</option>
-              <option value="30d">Last 30 Days</option>
-            </select>
-          </div>
-
-          <button
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+        <div className="relative w-full md:w-64">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Input
+            type="text"
+            placeholder="Search logs..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+        
+        <div className="flex gap-2">
+          <Button
+            variant={timeRange === '24h' ? "default" : "outline"}
+            size="sm"
+            onClick={() => setTimeRange('24h')}
+          >
+            24h
+          </Button>
+          <Button
+            variant={timeRange === '7d' ? "default" : "outline"}
+            size="sm"
+            onClick={() => setTimeRange('7d')}
+          >
+            7d
+          </Button>
+          <Button
+            variant={timeRange === '30d' ? "default" : "outline"}
+            size="sm"
+            onClick={() => setTimeRange('30d')}
+          >
+            30d
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             onClick={fetchLogs}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
           >
             Refresh
-          </button>
+          </Button>
         </div>
       </div>
-
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Timestamp
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Level
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Source
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Message
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Details
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {logs.map((log) => (
-              <tr key={log.id}>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {formatTimestamp(log.timestamp)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getLevelColor(log.level)}`}>
-                    {log.level}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {log.source}
-                </td>
-                <td className="px-6 py-4 text-sm text-gray-900">
-                  {log.message}
-                </td>
-                <td className="px-6 py-4 text-sm text-gray-500">
-                  {log.userId && <div>User: {log.userId}</div>}
-                  {log.deviceId && <div>Device: {log.deviceId}</div>}
-                  {log.metadata && (
-                    <pre className="mt-1 text-xs">
-                      {JSON.stringify(log.metadata, null, 2)}
-                    </pre>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      
+      <Card>
+        <CardHeader>
+          <CardTitle>System Logs</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {filteredLogs.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-500" />
+              <p>No logs found for the selected time period.</p>
+              <p className="text-sm mt-2">Try changing the time range or search criteria.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Time</TableHead>
+                    <TableHead>Level</TableHead>
+                    <TableHead>Source</TableHead>
+                    <TableHead className="w-full">Message</TableHead>
+                    <TableHead>User/Device</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredLogs.map((log) => (
+                    <TableRow key={log.id}>
+                      <TableCell className="whitespace-nowrap">
+                        {formatTimestamp(log.timestamp)}
+                      </TableCell>
+                      <TableCell>
+                        {getLevelBadge(log.level)}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {log.source}
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          {log.message}
+                          {log.details && (
+                            <div className="text-xs text-muted-foreground mt-1 max-w-md overflow-hidden text-ellipsis">
+                              {log.details}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {log.userId && (
+                          <div className="text-xs">User: {log.userId}</div>
+                        )}
+                        {log.deviceId && (
+                          <div className="text-xs">Device: {log.deviceId}</div>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }; 

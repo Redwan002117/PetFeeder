@@ -26,33 +26,18 @@ const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({
   const { toast } = useToast();
 
   const handleGoogleSignIn = async () => {
-    // For signup mode, validate username first
-    if (mode === 'signup') {
-      if (!username || username.trim().length < 3) {
-        toast({
-          title: "Username Required",
-          description: "Please enter a valid username (at least 3 characters) before continuing with Google.",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-        toast({
-          title: "Invalid Username",
-          description: "Username can only contain letters, numbers, and underscores.",
-          variant: "destructive",
-        });
-        return;
-      }
+    // For signup mode, we'll store the username if provided, but not require it
+    if (mode === 'signup' && username) {
+      // Store username if provided, but don't require it
+      localStorage.setItem('pendingUsername', username);
     }
     
     setLoading(true);
     try {
-      console.log(`Starting Google ${mode} with username:`, username);
+      console.log(`Starting Google ${mode} with username:`, username || 'not provided');
       
-      // Call the signInWithGoogle function with username if in signup mode
-      const result = await signInWithGoogle(mode === 'signup' ? username : undefined);
+      // Call the signInWithGoogle function with the mode
+      const result = await signInWithGoogle(mode === 'signup');
       
       console.log("Google sign-in result:", result);
       
@@ -68,6 +53,7 @@ const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({
         // If we have a user object, we can navigate directly
         if (result.user) {
           if (result.newUser) {
+            // Redirect to username setup page for new users
             navigate("/username-setup");
           } else {
             navigate("/dashboard");

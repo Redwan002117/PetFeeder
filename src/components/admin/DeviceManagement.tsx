@@ -1,28 +1,38 @@
-import React, { useEffect, useState } from 'react';
-import { collection, query, getDocs, updateDoc, doc, deleteDoc } from 'firebase/firestore';
-import { db } from '../../config/firebase';
-import { toast } from 'react-hot-toast';
+import React, { useState, useEffect } from 'react';
+import { database, ref, get, update } from '@/lib/firebase';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Loader2, Search, Edit, Trash2, AlertTriangle, CheckCircle, Server } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
 
 interface Device {
   id: string;
   name: string;
-  userId: string;
+  status: 'online' | 'offline' | 'error' | 'maintenance';
   model: string;
+  serialNumber: string;
   firmwareVersion: string;
-  isOnline: boolean;
-  lastActive: string;
+  lastSeen: number;
+  userId: string;
   foodLevel: number;
-  status: 'active' | 'maintenance' | 'disabled';
-  settings: {
-    feedingSize: number;
-    notificationsEnabled: boolean;
-  };
+  batteryLevel?: number;
+  location?: string;
 }
 
 export const DeviceManagement: React.FC = () => {
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'online' | 'offline' | 'maintenance'>('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [editingDevice, setEditingDevice] = useState<Device | null>(null);
+  const [deviceName, setDeviceName] = useState('');
+  const [deviceStatus, setDeviceStatus] = useState<'online' | 'offline' | 'error' | 'maintenance'>('online');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deviceToDelete, setDeviceToDelete] = useState<Device | null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     fetchDevices();
@@ -30,207 +40,300 @@ export const DeviceManagement: React.FC = () => {
 
   const fetchDevices = async () => {
     try {
-      const devicesSnapshot = await getDocs(collection(db, 'devices'));
-      const devicesData = devicesSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Device[];
-      setDevices(devicesData);
+      setLoading(true);
+      
+      // Fetch devices from Firebase Realtime Database
+      const devicesRef = ref(database, 'devices');
+      const devicesSnapshot = await get(devicesRef);
+      
+      if (!devicesSnapshot.exists()) {
+        setDevices([]);
+        setLoading(false);
+        return;
+      }
+      
+      const devicesData = devicesSnapshot.val();
+      
+      // Convert to array
+      const devicesArray = Object.entries(devicesData || {}).map(([id, data]: [string, any]) => ({
+        id,
+        ...data,
+        lastSeen: data.lastSeen || 0
+      }));
+      
+      // Sort devices by name
+      devicesArray.sort((a, b) => a.name.localeCompare(b.name));
+      
+      setDevices(devicesArray);
     } catch (error) {
-      toast.error('Failed to fetch devices');
       console.error('Error fetching devices:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load devices. Please try again later.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const updateDeviceStatus = async (deviceId: string, status: Device['status']) => {
-    try {
-      await updateDoc(doc(db, 'devices', deviceId), { status });
-      toast.success('Device status updated successfully');
-      fetchDevices();
-    } catch (error) {
-      toast.error('Failed to update device status');
-      console.error('Error updating device status:', error);
-    }
+  const handleEditDevice = (device: Device) => {
+    setEditingDevice(device);
+    setDeviceName(device.name);
+    setDeviceStatus(device.status);
   };
 
-  const deleteDevice = async (deviceId: string) => {
-    if (!window.confirm('Are you sure you want to delete this device?')) return;
-
+  const handleSaveDevice = async () => {
+    if (!editingDevice) return;
+    
     try {
-      await deleteDoc(doc(db, 'devices', deviceId));
-      toast.success('Device deleted successfully');
-      fetchDevices();
-    } catch (error) {
-      toast.error('Failed to delete device');
-      console.error('Error deleting device:', error);
-    }
-  };
-
-  const triggerFirmwareUpdate = async (deviceId: string) => {
-    try {
-      await updateDoc(doc(db, 'devices', deviceId), {
-        updatePending: true,
-        updateRequestedAt: new Date().toISOString()
+      // Update device in Firebase Realtime Database
+      const deviceRef = ref(database, `devices/${editingDevice.id}`);
+      await update(deviceRef, {
+        name: deviceName,
+        status: deviceStatus
       });
-      toast.success('Firmware update triggered');
+      
+      // Update local state
+      setDevices(devices.map(device => 
+        device.id === editingDevice.id 
+          ? { ...device, name: deviceName, status: deviceStatus } 
+          : device
+      ));
+      
+      toast({
+        title: "Device Updated",
+        description: "Device information has been updated successfully.",
+        variant: "default",
+      });
+      
+      setEditingDevice(null);
     } catch (error) {
-      toast.error('Failed to trigger firmware update');
-      console.error('Error triggering firmware update:', error);
+      console.error('Error updating device:', error);
+      toast({
+        title: "Update Failed",
+        description: "Failed to update device information. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
-  const getStatusColor = (status: Device['status']) => {
-    switch (status) {
-      case 'active':
-        return 'bg-green-100 text-green-800';
-      case 'maintenance':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'disabled':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+  const handleDeleteClick = (device: Device) => {
+    setDeviceToDelete(device);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteDevice = async () => {
+    if (!deviceToDelete) return;
+    
+    try {
+      // Delete device from Firebase Realtime Database
+      const deviceRef = ref(database, `devices/${deviceToDelete.id}`);
+      await update(deviceRef, null);
+      
+      // Update local state
+      setDevices(devices.filter(device => device.id !== deviceToDelete.id));
+      
+      toast({
+        title: "Device Deleted",
+        description: "Device has been deleted successfully.",
+        variant: "default",
+      });
+      
+      setDeleteDialogOpen(false);
+      setDeviceToDelete(null);
+    } catch (error) {
+      console.error('Error deleting device:', error);
+      toast({
+        title: "Delete Failed",
+        description: "Failed to delete device. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
+  // Filter devices based on search term
   const filteredDevices = devices.filter(device => {
-    switch (filter) {
-      case 'online':
-        return device.isOnline;
-      case 'offline':
-        return !device.isOnline;
-      case 'maintenance':
-        return device.status === 'maintenance';
-      default:
-        return true;
-    }
+    const searchTermLower = searchTerm.toLowerCase();
+    return (
+      device.name.toLowerCase().includes(searchTermLower) ||
+      device.model.toLowerCase().includes(searchTermLower) ||
+      device.serialNumber.toLowerCase().includes(searchTermLower) ||
+      (device.location && device.location.toLowerCase().includes(searchTermLower))
+    );
   });
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'online':
+        return <Badge variant="default" className="flex items-center gap-1 bg-green-500"><CheckCircle className="h-3 w-3" /> Online</Badge>;
+      case 'offline':
+        return <Badge variant="secondary" className="flex items-center gap-1"><Server className="h-3 w-3" /> Offline</Badge>;
+      case 'error':
+        return <Badge variant="destructive" className="flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Error</Badge>;
+      case 'maintenance':
+        return <Badge variant="outline" className="flex items-center gap-1 border-yellow-500 text-yellow-500"><AlertTriangle className="h-3 w-3" /> Maintenance</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
+  const formatLastSeen = (timestamp: number) => {
+    if (!timestamp) return 'Never';
+    
+    const date = new Date(timestamp);
+    return date.toLocaleString();
+  };
 
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500"></div>
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="bg-white shadow rounded-lg">
-      <div className="px-4 py-5 sm:px-6">
-        <h2 className="text-lg font-medium text-gray-900">Device Management</h2>
-        <p className="mt-1 text-sm text-gray-500">Monitor and manage all PetFeeder devices</p>
-      </div>
-
-      <div className="px-4 py-3 border-b border-gray-200 sm:px-6">
-        <div className="flex items-center justify-between">
-          <select
-            value={filter}
-            onChange={(e) => setFilter(e.target.value as any)}
-            className="mt-1 block w-48 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-          >
-            <option value="all">All Devices</option>
-            <option value="online">Online</option>
-            <option value="offline">Offline</option>
-            <option value="maintenance">Maintenance</option>
-          </select>
-
-          <button
-            onClick={fetchDevices}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
-          >
-            Refresh
-          </button>
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+        <div className="relative w-full md:w-64">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Input
+            type="text"
+            placeholder="Search devices..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-8"
+          />
         </div>
+        
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={fetchDevices}
+        >
+          Refresh
+        </Button>
       </div>
-
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Device Info
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Food Level
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Firmware
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {filteredDevices.map((device) => (
-              <tr key={device.id}>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0 h-10 w-10 flex items-center justify-center bg-gray-100 rounded-full">
-                      🤖
-                    </div>
-                    <div className="ml-4">
-                      <div className="text-sm font-medium text-gray-900">{device.name}</div>
-                      <div className="text-sm text-gray-500">ID: {device.id}</div>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex flex-col">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(device.status)}`}>
-                      {device.status}
-                    </span>
-                    <span className={`mt-1 text-xs ${device.isOnline ? 'text-green-600' : 'text-red-600'}`}>
-                      {device.isOnline ? '● Online' : '● Offline'}
-                    </span>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    <div className="w-16 bg-gray-200 rounded-full h-2.5">
-                      <div 
-                        className={`h-2.5 rounded-full ${device.foodLevel > 20 ? 'bg-green-600' : 'bg-red-600'}`}
-                        style={{ width: `${device.foodLevel}%` }}
-                      ></div>
-                    </div>
-                    <span className="ml-2 text-sm text-gray-500">{device.foodLevel}%</span>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <div>Version: {device.firmwareVersion}</div>
-                  <button
-                    onClick={() => triggerFirmwareUpdate(device.id)}
-                    className="mt-1 text-xs text-indigo-600 hover:text-indigo-900"
-                  >
-                    Check for updates
-                  </button>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <select
-                    value={device.status}
-                    onChange={(e) => updateDeviceStatus(device.id, e.target.value as Device['status'])}
-                    className="mr-3 text-sm border-gray-300 rounded-md"
-                  >
-                    <option value="active">Active</option>
-                    <option value="maintenance">Maintenance</option>
-                    <option value="disabled">Disabled</option>
-                  </select>
-                  <button
-                    onClick={() => deleteDevice(device.id)}
-                    className="text-red-600 hover:text-red-900"
-                  >
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      
+      <Card>
+        <CardHeader>
+          <CardTitle>Device Management</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {filteredDevices.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Server className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+              <p>No devices found.</p>
+              {searchTerm && <p className="text-sm mt-2">Try changing your search criteria.</p>}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Model</TableHead>
+                    <TableHead>Serial Number</TableHead>
+                    <TableHead>Firmware</TableHead>
+                    <TableHead>Last Seen</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredDevices.map((device) => (
+                    <TableRow key={device.id}>
+                      <TableCell className="font-medium">{device.name}</TableCell>
+                      <TableCell>{getStatusBadge(device.status)}</TableCell>
+                      <TableCell>{device.model}</TableCell>
+                      <TableCell>{device.serialNumber}</TableCell>
+                      <TableCell>{device.firmwareVersion}</TableCell>
+                      <TableCell>{formatLastSeen(device.lastSeen)}</TableCell>
+                      <TableCell>
+                        <div className="flex space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEditDevice(device)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteClick(device)}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      
+      {/* Edit Device Dialog */}
+      {editingDevice && (
+        <Dialog open={!!editingDevice} onOpenChange={(open) => !open && setEditingDevice(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Device</DialogTitle>
+              <DialogDescription>
+                Update device information. Click save when you're done.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <label htmlFor="deviceName" className="text-sm font-medium">Device Name</label>
+                <Input
+                  id="deviceName"
+                  value={deviceName}
+                  onChange={(e) => setDeviceName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="deviceStatus" className="text-sm font-medium">Status</label>
+                <select
+                  id="deviceStatus"
+                  value={deviceStatus}
+                  onChange={(e) => setDeviceStatus(e.target.value as any)}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <option value="online">Online</option>
+                  <option value="offline">Offline</option>
+                  <option value="error">Error</option>
+                  <option value="maintenance">Maintenance</option>
+                </select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditingDevice(null)}>Cancel</Button>
+              <Button onClick={handleSaveDevice}>Save Changes</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+      
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Deletion</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete the device "{deviceToDelete?.name}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDeleteDevice}>Delete Device</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }; 

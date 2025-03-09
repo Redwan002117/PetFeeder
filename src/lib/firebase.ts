@@ -211,13 +211,12 @@ export const getGoogleAuthProvider = () => {
   return provider;
 };
 
-// Update the signInWithGoogle function to accept a username parameter
-export const signInWithGoogle = async (username?: string) => {
+// Update the signInWithGoogle function to accept a boolean for signup mode
+export const signInWithGoogle = async (isSignup?: boolean) => {
   try {
     // Store auth mode in session storage for redirect handling
-    if (username) {
+    if (isSignup) {
       localStorage.setItem('authMode', 'signup');
-      localStorage.setItem('pendingUsername', username);
     } else {
       localStorage.setItem('authMode', 'signin');
     }
@@ -234,42 +233,7 @@ export const signInWithGoogle = async (username?: string) => {
       // Process the user based on auth mode
       const authMode = localStorage.getItem('authMode');
       
-      if (authMode === 'signup' && username) {
-        // Create or update user data in the database
-        const userRef = ref(database, `users/${user.uid}`);
-        const userSnapshot = await get(userRef);
-        
-        if (!userSnapshot.exists()) {
-          // Create new user data
-          const userData = {
-            email: user.email,
-            username: username,
-            displayName: username,
-            role: 'user',
-            permissions: {
-              canFeed: true,
-              canSchedule: true,
-              canViewStats: true
-            },
-            createdAt: serverTimestamp(),
-            provider: 'google'
-          };
-          
-          // Save user data to database
-          await set(userRef, userData);
-        }
-        
-        // Update user profile with the username
-        await updateUserProfile(user, { displayName: username });
-        
-        // Clear the local storage
-        localStorage.removeItem('authMode');
-        localStorage.removeItem('pendingUsername');
-        
-        return { success: true, newUser: true, user };
-      }
-      
-      // For regular sign-in, check if user exists in database
+      // Check if user exists in database
       const userRef = ref(database, `users/${user.uid}`);
       const userSnapshot = await get(userRef);
       
@@ -397,8 +361,11 @@ export const handleRedirectResult = async () => {
 
 export const registerUser = async (email: string, password: string, name: string, username: string) => {
   try {
+    console.log("Starting user registration process for:", email);
+    
     // Check if username is already taken
     const usersRef = ref(database, 'users');
+    console.log("Checking if username is already taken:", username);
     const snapshot = await get(usersRef);
     
     if (snapshot.exists()) {
@@ -412,20 +379,25 @@ export const registerUser = async (email: string, password: string, name: string
       });
       
       if (usernameTaken) {
+        console.log("Username is already taken:", username);
         throw new Error("Username is already taken. Please choose a different username.");
       }
     }
     
     // Create user with email and password
+    console.log("Creating user with email and password");
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
+    console.log("User created successfully:", user.uid);
     
     // Update user profile with the provided username
+    console.log("Updating user profile with username:", username);
     await updateProfile(user, {
       displayName: username
     });
     
     // Send email verification
+    console.log("Sending email verification");
     await sendEmailVerification(user);
     
     // Create user data with role in the database
@@ -444,7 +416,9 @@ export const registerUser = async (email: string, password: string, name: string
     };
     
     // Save user data to database
+    console.log("Saving user data to database for user:", user.uid);
     await set(ref(database, `users/${user.uid}`), userData);
+    console.log("User registration completed successfully");
     
     return userCredential;
   } catch (error: any) {

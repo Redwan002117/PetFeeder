@@ -23,7 +23,7 @@ const Register = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { registerUser } = useAuth();
+  const { register } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
@@ -32,6 +32,7 @@ const Register = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    console.log("Register form submitted with:", { email, password, name, username });
 
     if (!email || !password || !confirmPassword || !username || !name) {
       setError("All fields are required");
@@ -55,9 +56,11 @@ const Register = () => {
 
     try {
       setLoading(true);
+      console.log("Attempting to register user...");
       
-      // Register regular user
-      await registerUser(email, password, name, username);
+      // Register regular user using the register function from AuthContext
+      const result = await register(email, password, username, false, name);
+      console.log("Registration result:", result);
       
       toast({
         title: "Registration successful",

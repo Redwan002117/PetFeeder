@@ -1,15 +1,16 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { Spinner } from './ui/spinner';
 
 export function AdminRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { currentUser, userData, loading } = useAuth();
 
   if (loading) {
-    return <div>Loading...</div>;
+    return <Spinner size="md" className="mx-auto my-12" />;
   }
 
-  // Check if user is an admin (you might want to add this field to your user object)
-  if (!user || !user.email?.endsWith('@admin.com')) {
+  // Check if user is an admin
+  if (!currentUser || !userData || userData.role !== 'admin') {
     return <Navigate to="/login" />;
   }
 
