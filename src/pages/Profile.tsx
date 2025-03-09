@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { updateProfile, sendEmailVerification, User } from "firebase/auth";
 import PageHeader from "@/components/PageHeader";
 import { sendEmail } from '@/lib/email-service';
+import { sendAdminRequestEmail } from "@/services/email-service";
 
 // Add a type extension for the User type to include isAdmin property
 declare module 'firebase/auth' {
@@ -191,72 +192,78 @@ const Profile = () => {
   };
 
   const handleRequestAdminAccess = async () => {
-    if (!currentUser) return;
+    if (!currentUser) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to request admin access.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setAdminRequestLoading(true);
     
     try {
-      setAdminRequestLoading(true);
-      
       // Simulate a network request delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Generate a unique request ID
-      const requestId = `req_${Date.now()}`;
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Send a real email to the admin using our email service
       try {
-        // Prepare email parameters
-        const emailResult = await sendEmail({
-          to: 'GamerNo002117@redwancodes.com',
-          from_name: currentUser.displayName || 'PetFeeder User',
-          from_email: currentUser.email || 'noreply@petfeeder.redwancodes.com',
-          subject: 'PetFeeder Admin Request',
-          message: `User ${currentUser.email} (${currentUser.displayName || 'Unknown User'}) has requested admin access.`,
-          user_id: currentUser.uid,
-          request_id: requestId,
-          approve_url: `https://petfeeder.redwancodes.com/admin/approve-request?userId=${currentUser.uid}&requestId=${requestId}`,
-          deny_url: `https://petfeeder.redwancodes.com/admin/deny-request?userId=${currentUser.uid}&requestId=${requestId}`
-        });
+        const emailResult = await sendAdminRequestEmail(
+          currentUser.email || 'unknown@example.com',
+          currentUser.displayName || 'PetFeeder User',
+          currentUser.uid,
+          `User ${currentUser.email} (${currentUser.displayName || 'Unknown User'}) has requested admin access.`
+        );
         
-        // Log success
-        console.log('Admin request email sent successfully');
-        
-        // Store the admin request in the user's own document where they have permission
-        try {
-          // Update the user's profile to indicate they've requested admin access
-          const userRef = ref(database, `users/${currentUser.uid}`);
-          await update(userRef, {
-            adminRequestStatus: 'pending',
-            adminRequestId: requestId,
-            adminRequestDate: serverTimestamp()
-          });
+        if (emailResult.success) {
+          console.log('Admin request email sent successfully');
           
-          // Show success message
-          toast({
-            title: "Request Sent",
-            description: "Your admin access request has been sent successfully.",
-            variant: "default",
-          });
-          
-          setAdminRequestSent(true);
-        } catch (dbError) {
-          console.error('Error updating user profile with admin request:', dbError);
-          
-          // If we get a permission denied error, still consider it a success if the email was sent
-          if (dbError.message && dbError.message.includes('Permission denied')) {
+          // Store the admin request in the user's own document where they have permission
+          try {
+            // Update the user's profile to indicate they've requested admin access
+            const userRef = ref(database, `users/${currentUser.uid}`);
+            await update(userRef, {
+              adminRequestStatus: 'pending',
+              adminRequestDate: serverTimestamp()
+            });
+            
+            // Show success message
             toast({
               title: "Request Sent",
-              description: "Your admin access request email has been sent. Database update failed due to permissions, but the admin has been notified.",
+              description: "Your admin access request has been sent successfully.",
               variant: "default",
             });
+            
             setAdminRequestSent(true);
-          } else {
-            // For other errors, show an error message
-            toast({
-              title: "Partial Success",
-              description: "Email sent but failed to update your profile. Please try again later.",
-              variant: "destructive",
-            });
+          } catch (dbError) {
+            console.error('Error updating user profile with admin request:', dbError);
+            
+            // If we get a permission denied error, still consider it a success if the email was sent
+            if (dbError.message && dbError.message.includes('Permission denied')) {
+              toast({
+                title: "Request Sent",
+                description: "Your admin access request email has been sent. Database update failed due to permissions, but the admin has been notified.",
+                variant: "default",
+              });
+              setAdminRequestSent(true);
+            } else {
+              // For other errors, show an error message
+              toast({
+                title: "Partial Success",
+                description: "Email sent but failed to update your profile. Please try again later.",
+                variant: "destructive",
+              });
+            }
           }
+        } else {
+          // Email sending failed
+          console.error('Failed to send admin request email:', emailResult.message);
+          toast({
+            title: "Request Failed",
+            description: "Failed to send admin access request email. Please try again later.",
+            variant: "destructive",
+          });
         }
       } catch (emailError) {
         console.error('Error sending admin request email:', emailError);

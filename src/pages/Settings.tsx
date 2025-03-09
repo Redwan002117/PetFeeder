@@ -8,34 +8,21 @@ import { Input } from "@/components/ui/input";
 import { useNotifications } from "@/contexts/NotificationContext";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Bell, Volume2, VolumeX, Lock, AlertTriangle, Calendar, HandPlatter, Wifi, Mail, Smartphone, Activity, XCircle, AlertCircle, Settings as SettingsIcon, Server, Key, Send } from "lucide-react";
+import { Bell, Volume2, VolumeX, Lock, AlertTriangle, Calendar, HandPlatter, Wifi, Mail, Smartphone, Activity, XCircle, AlertCircle, Settings as SettingsIcon, Server, Key, Send, ShieldAlert } from "lucide-react";
 import NotificationSettings from "@/components/NotificationSettings";
 import ChangePasswordForm from "@/components/ChangePasswordForm";
 import { ref, update, get } from "firebase/database";
 import { database } from "@/lib/firebase";
 import PageHeader from "@/components/PageHeader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-// Define schema for SMTP settings form
-const smtpFormSchema = z.object({
-  service: z.string().min(1, "Service is required"),
-  host: z.string().min(1, "Host is required"),
-  port: z.string().min(1, "Port is required"),
-  secure: z.boolean().default(true),
-  username: z.string().min(1, "Username is required"),
-  password: z.string().min(1, "Password is required"),
-  fromEmail: z.string().email("Invalid email address"),
-  apiKey: z.string().optional(),
-});
-
-type SMTPFormValues = z.infer<typeof smtpFormSchema>;
+// Import react-hook-form and zod only if the user is an admin
+// This prevents the build error when these modules aren't used
+const AdminOnlySettings = React.lazy(() => import('@/components/AdminOnlySettings'));
 
 const Settings = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, isAdmin } = useAuth();
   const { notificationsEnabled, requestPermission, disableNotifications } = useNotifications();
   const { toast } = useToast();
   const [soundEnabled, setSoundEnabled] = React.useState(
@@ -44,51 +31,7 @@ const Settings = () => {
   const [emailNotifications, setEmailNotifications] = React.useState(
     localStorage.getItem("emailNotifications") === "enabled"
   );
-  const [smtpProvider, setSmtpProvider] = React.useState("smtp");
-  const [isLoading, setIsLoading] = React.useState(false);
-
-  // Initialize form with default values
-  const form = useForm<SMTPFormValues>({
-    resolver: zodResolver(smtpFormSchema),
-    defaultValues: {
-      service: "",
-      host: "",
-      port: "",
-      secure: true,
-      username: "",
-      password: "",
-      fromEmail: "",
-      apiKey: "",
-    },
-  });
-
-  // Load SMTP settings from Firebase when component mounts
-  React.useEffect(() => {
-    if (currentUser) {
-      setIsLoading(true);
-      const smtpSettingsRef = ref(database, `users/${currentUser.uid}/smtpSettings`);
-      get(smtpSettingsRef).then((snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.val();
-          form.reset({
-            service: data.service || "",
-            host: data.host || "",
-            port: data.port || "",
-            secure: data.secure !== undefined ? data.secure : true,
-            username: data.username || "",
-            password: data.password || "",
-            fromEmail: data.fromEmail || "",
-            apiKey: data.apiKey || "",
-          });
-          setSmtpProvider(data.service === "emailjs" ? "api" : "smtp");
-        }
-        setIsLoading(false);
-      }).catch(error => {
-        console.error("Error loading SMTP settings:", error);
-        setIsLoading(false);
-      });
-    }
-  }, [currentUser, form]);
+  const [activeTab, setActiveTab] = React.useState("general");
 
   const handleSoundToggle = () => {
     const newSoundEnabled = !soundEnabled;
@@ -146,76 +89,6 @@ const Settings = () => {
     });
   };
 
-  const onSubmitSMTPSettings = (data: SMTPFormValues) => {
-    if (!currentUser) {
-      toast({
-        title: "Error",
-        description: "You must be logged in to save SMTP settings.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsLoading(true);
-    const smtpSettingsRef = ref(database, `users/${currentUser.uid}/smtpSettings`);
-    
-    update(smtpSettingsRef, {
-      ...data,
-      updatedAt: new Date().toISOString(),
-    })
-      .then(() => {
-        toast({
-          title: "Settings Saved",
-          description: "Your email settings have been updated successfully.",
-        });
-        setIsLoading(false);
-      })
-      .catch((error) => {
-        console.error("Error saving SMTP settings:", error);
-        toast({
-          title: "Error",
-          description: "Failed to save email settings. Please try again.",
-          variant: "destructive",
-        });
-        setIsLoading(false);
-      });
-  };
-
-  const handleTestEmail = async () => {
-    const values = form.getValues();
-    
-    if (!currentUser) {
-      toast({
-        title: "Error",
-        description: "You must be logged in to send a test email.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    setIsLoading(true);
-    
-    try {
-      // This would typically call a backend function to send a test email
-      // For now, we'll just simulate it with a timeout
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      toast({
-        title: "Test Email Sent",
-        description: "If your settings are correct, you should receive a test email shortly.",
-      });
-    } catch (error) {
-      console.error("Error sending test email:", error);
-      toast({
-        title: "Error",
-        description: "Failed to send test email. Please check your settings and try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   return (
     <div className="container mx-auto py-8 px-4">
       <PageHeader 
@@ -224,14 +97,19 @@ const Settings = () => {
         description="Configure your application preferences and account settings"
       />
       
-      <Tabs defaultValue="general" className="w-full">
+      <Tabs 
+        defaultValue="general" 
+        className="w-full"
+        value={activeTab}
+        onValueChange={setActiveTab}
+      >
         <TabsList className="mb-6 grid grid-cols-2 md:grid-cols-6 max-w-4xl overflow-x-auto">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="feeding">Feeding</TabsTrigger>
           <TabsTrigger value="connectivity">Connectivity</TabsTrigger>
-          <TabsTrigger value="smtp">Email Settings</TabsTrigger>
+          {isAdmin && <TabsTrigger value="admin">Admin Settings</TabsTrigger>}
         </TabsList>
         
         <TabsContent value="general" className="space-y-6">
@@ -342,29 +220,15 @@ const Settings = () => {
                     
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
-                        <div className="h-8 w-8 rounded-full bg-orange-100 dark:bg-orange-900 flex items-center justify-center">
-                          <Wifi className="h-4 w-4 text-orange-600 dark:text-orange-300" />
+                        <div className="h-8 w-8 rounded-full bg-yellow-100 dark:bg-yellow-900 flex items-center justify-center">
+                          <Wifi className="h-4 w-4 text-yellow-600 dark:text-yellow-300" />
                         </div>
                         <div>
-                          <p className="text-sm font-medium">Device Offline Alerts</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">Notifications when your device goes offline</p>
+                          <p className="text-sm font-medium">Connectivity Issues</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Notifications when device goes offline</p>
                         </div>
                       </div>
                       <Switch defaultChecked />
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              {!notificationsEnabled && (
-                <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-md">
-                  <div className="flex items-start">
-                    <AlertCircle className="h-5 w-5 text-amber-500 mr-2 flex-shrink-0" />
-                    <div>
-                      <p className="text-sm font-medium">Notifications are disabled</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        Enable notifications to receive alerts about your pet's feeding schedule and device status.
-                      </p>
                     </div>
                   </div>
                 </div>
@@ -375,7 +239,7 @@ const Settings = () => {
           <Card>
             <CardHeader>
               <CardTitle>Email Notifications</CardTitle>
-              <CardDescription>Configure email notification preferences</CardDescription>
+              <CardDescription>Configure email notifications</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
@@ -392,12 +256,48 @@ const Settings = () => {
               <p className="text-sm text-gray-500">
                 When enabled, you will receive email notifications for important events.
               </p>
+              
+              {emailNotifications && (
+                <div className="mt-4">
+                  <NotificationSettings />
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
         
         <TabsContent value="security" className="space-y-6">
-          <ChangePasswordForm />
+          <Card>
+            <CardHeader>
+              <CardTitle>Change Password</CardTitle>
+              <CardDescription>Update your account password</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChangePasswordForm />
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle>Two-Factor Authentication</CardTitle>
+              <CardDescription>Add an extra layer of security to your account</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Lock className="h-5 w-5 text-gray-500" />
+                  <Label htmlFor="2fa-toggle">Enable Two-Factor Authentication</Label>
+                </div>
+                <Switch id="2fa-toggle" />
+              </div>
+              <p className="text-sm text-gray-500">
+                When enabled, you will be required to enter a verification code sent to your phone in addition to your password when logging in.
+              </p>
+              <Button variant="outline" className="mt-2">
+                Set Up Two-Factor Authentication
+              </Button>
+            </CardContent>
+          </Card>
           
           <Card>
             <CardHeader>
@@ -405,19 +305,37 @@ const Settings = () => {
               <CardDescription>Manage your active sessions</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
-                <div>
-                  <p className="font-medium">Current Session</p>
-                  <p className="text-sm text-gray-500">
-                    {navigator.userAgent.split(' ').slice(-1)[0].replace('/', ' ')}
-                  </p>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
+                  <div className="flex items-center space-x-3">
+                    <Smartphone className="h-5 w-5 text-gray-500" />
+                    <div>
+                      <p className="text-sm font-medium">Current Device</p>
+                      <p className="text-xs text-gray-500">Last active: Just now</p>
+                    </div>
+                  </div>
+                  <div className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                    Active
+                  </div>
                 </div>
-                <div className="text-green-600 text-sm font-medium">Active</div>
+                
+                <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
+                  <div className="flex items-center space-x-3">
+                    <Smartphone className="h-5 w-5 text-gray-500" />
+                    <div>
+                      <p className="text-sm font-medium">iPhone 13</p>
+                      <p className="text-xs text-gray-500">Last active: 2 days ago</p>
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="sm">
+                    <XCircle className="h-4 w-4 mr-1" />
+                    Revoke
+                  </Button>
+                </div>
               </div>
               
-              <Button variant="outline" className="w-full">
-                <XCircle className="mr-2 h-4 w-4" />
-                Sign Out All Other Devices
+              <Button variant="outline" className="mt-4 w-full">
+                Log Out of All Devices
               </Button>
             </CardContent>
           </Card>
@@ -426,70 +344,68 @@ const Settings = () => {
         <TabsContent value="feeding" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Feeding Settings</CardTitle>
+              <CardTitle>Feeding Preferences</CardTitle>
               <CardDescription>Configure default feeding settings</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="default-portion">Default Portion Size (grams)</Label>
-                  <div className="flex items-center mt-1">
-                    <input
-                      type="range"
-                      id="default-portion"
-                      min="5"
-                      max="100"
-                      step="5"
-                      defaultValue="30"
-                      className="w-full"
-                      onChange={(e) => {
-                        const portionSizeElement = document.getElementById('portion-size-value');
-                        if (portionSizeElement) {
-                          portionSizeElement.textContent = `${e.target.value}g`;
-                        }
-                      }}
-                    />
-                    <span id="portion-size-value" className="ml-2 w-12 text-center font-medium">30g</span>
-                  </div>
-                </div>
-                
-                <div>
-                  <Label htmlFor="max-daily">Maximum Daily Feedings</Label>
-                  <div className="flex items-center mt-1">
-                    <input
-                      type="range"
-                      id="max-daily"
-                      min="1"
-                      max="10"
-                      defaultValue="4"
-                      className="w-full"
-                      onChange={(e) => {
-                        const maxDailyElement = document.getElementById('max-daily-value');
-                        if (maxDailyElement) {
-                          maxDailyElement.textContent = e.target.value;
-                        }
-                      }}
-                    />
-                    <span id="max-daily-value" className="ml-2 w-12 text-center font-medium">4</span>
-                  </div>
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Calendar className="h-5 w-5 text-gray-500" />
-                    <Label htmlFor="schedule-toggle">Enable Default Schedule</Label>
-                  </div>
-                  <Switch id="schedule-toggle" defaultChecked={true} />
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <HandPlatter className="h-5 w-5 text-gray-500" />
-                    <Label htmlFor="manual-toggle">Allow Manual Feeding</Label>
-                  </div>
-                  <Switch id="manual-toggle" defaultChecked={true} />
-                </div>
+            <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="default-portion">Default Portion Size (grams)</Label>
+                <Input id="default-portion" type="number" defaultValue="50" />
+                <p className="text-xs text-gray-500">
+                  This will be the default portion size for manual feedings
+                </p>
               </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="max-daily">Maximum Daily Feedings</Label>
+                <Input id="max-daily" type="number" defaultValue="3" />
+                <p className="text-xs text-gray-500">
+                  Maximum number of feedings allowed per day
+                </p>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="slow-feed">Slow Feed Mode</Label>
+                  <p className="text-xs text-gray-500">
+                    Dispenses food more slowly to prevent pets from eating too quickly
+                  </p>
+                </div>
+                <Switch id="slow-feed" />
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle>Feeding Schedule</CardTitle>
+              <CardDescription>Configure default schedule settings</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="auto-adjust">Auto-Adjust for Daylight Savings</Label>
+                  <p className="text-xs text-gray-500">
+                    Automatically adjust feeding times when daylight savings changes
+                  </p>
+                </div>
+                <Switch id="auto-adjust" defaultChecked />
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="weekend-diff">Different Weekend Schedule</Label>
+                  <p className="text-xs text-gray-500">
+                    Use a different feeding schedule on weekends
+                  </p>
+                </div>
+                <Switch id="weekend-diff" />
+              </div>
+              
+              <Button variant="outline" className="w-full">
+                <Calendar className="mr-2 h-4 w-4" />
+                View Full Schedule
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
@@ -498,319 +414,112 @@ const Settings = () => {
           <Card>
             <CardHeader>
               <CardTitle>Device Connectivity</CardTitle>
-              <CardDescription>Configure device connection settings</CardDescription>
+              <CardDescription>Configure how your device connects to the network</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Wifi className="h-5 w-5 text-gray-500" />
-                  <Label htmlFor="auto-connect-toggle">Auto-Connect to Device</Label>
-                </div>
-                <Switch id="auto-connect-toggle" defaultChecked={true} />
+              <div className="space-y-2">
+                <Label htmlFor="connection-type">Connection Type</Label>
+                <Select defaultValue="wifi">
+                  <SelectTrigger id="connection-type">
+                    <SelectValue placeholder="Select connection type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="wifi">Wi-Fi</SelectItem>
+                    <SelectItem value="bluetooth">Bluetooth</SelectItem>
+                    <SelectItem value="ethernet">Ethernet</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Activity className="h-5 w-5 text-gray-500" />
-                  <Label htmlFor="status-check-toggle">Periodic Status Checks</Label>
+                <div className="space-y-0.5">
+                  <Label htmlFor="auto-reconnect">Auto-Reconnect</Label>
+                  <p className="text-xs text-gray-500">
+                    Automatically attempt to reconnect when connection is lost
+                  </p>
                 </div>
-                <Switch id="status-check-toggle" defaultChecked={true} />
+                <Switch id="auto-reconnect" defaultChecked />
               </div>
               
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Smartphone className="h-5 w-5 text-gray-500" />
-                  <Label htmlFor="offline-mode-toggle">Offline Mode</Label>
+                <div className="space-y-0.5">
+                  <Label htmlFor="offline-mode">Offline Mode</Label>
+                  <p className="text-xs text-gray-500">
+                    Continue to operate on schedule even when internet connection is lost
+                  </p>
                 </div>
-                <Switch id="offline-mode-toggle" defaultChecked={false} />
+                <Switch id="offline-mode" defaultChecked />
               </div>
               
-              <p className="text-sm text-gray-500">
-                Offline mode allows the device to operate without an internet connection, but remote control will be disabled.
-              </p>
+              <Button variant="outline" className="w-full">
+                <Activity className="mr-2 h-4 w-4" />
+                Test Connection
+              </Button>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle>Network Settings</CardTitle>
+              <CardDescription>Configure network settings for your device</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="wifi-name">Wi-Fi Network Name</Label>
+                <Input id="wifi-name" defaultValue="Home Network" />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="wifi-password">Wi-Fi Password</Label>
+                <Input id="wifi-password" type="password" value="••••••••••" />
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="use-static-ip">Use Static IP</Label>
+                  <p className="text-xs text-gray-500">
+                    Use a static IP address instead of DHCP
+                  </p>
+                </div>
+                <Switch id="use-static-ip" />
+              </div>
+              
+              <Button variant="outline" className="w-full">
+                <Wifi className="mr-2 h-4 w-4" />
+                Scan for Networks
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
         
-        <TabsContent value="smtp" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Mail className="mr-2 h-5 w-5" />
-                Email Configuration
-              </CardTitle>
-              <CardDescription>
-                Configure your email settings for notifications and admin requests
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="mb-6">
-                <Label htmlFor="email-provider" className="mb-2 block">Email Provider Type</Label>
-                <Select
-                  value={smtpProvider}
-                  onValueChange={(value) => setSmtpProvider(value)}
-                >
-                  <SelectTrigger id="email-provider" className="w-full md:w-1/2">
-                    <SelectValue placeholder="Select provider type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="smtp">SMTP Server</SelectItem>
-                    <SelectItem value="api">Email API (EmailJS, SendGrid, etc.)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmitSMTPSettings)} className="space-y-6">
-                  {smtpProvider === "smtp" ? (
-                    <>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <FormField
-                          control={form.control}
-                          name="service"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Service</FormLabel>
-                              <Select
-                                onValueChange={field.onChange}
-                                defaultValue={field.value}
-                              >
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select service" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="gmail">Gmail</SelectItem>
-                                  <SelectItem value="outlook">Outlook</SelectItem>
-                                  <SelectItem value="yahoo">Yahoo</SelectItem>
-                                  <SelectItem value="custom">Custom</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <FormDescription>
-                                Select your email service provider
-                              </FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name="host"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>SMTP Host</FormLabel>
-                              <FormControl>
-                                <Input placeholder="smtp.example.com" {...field} />
-                              </FormControl>
-                              <FormDescription>
-                                The hostname of your SMTP server
-                              </FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name="port"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>SMTP Port</FormLabel>
-                              <FormControl>
-                                <Input placeholder="587 or 465" {...field} />
-                              </FormControl>
-                              <FormDescription>
-                                The port for your SMTP server (usually 587 or 465)
-                              </FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name="secure"
-                          render={({ field }) => (
-                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                              <div className="space-y-0.5">
-                                <FormLabel className="text-base">
-                                  Use Secure Connection (SSL/TLS)
-                                </FormLabel>
-                                <FormDescription>
-                                  Enable for secure email transmission (recommended)
-                                </FormDescription>
-                              </div>
-                              <FormControl>
-                                <Switch
-                                  checked={field.value}
-                                  onCheckedChange={field.onChange}
-                                />
-                              </FormControl>
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name="username"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>SMTP Username</FormLabel>
-                              <FormControl>
-                                <Input placeholder="your-email@example.com" {...field} />
-                              </FormControl>
-                              <FormDescription>
-                                Usually your email address
-                              </FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name="password"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>SMTP Password</FormLabel>
-                              <FormControl>
-                                <Input type="password" placeholder="••••••••" {...field} />
-                              </FormControl>
-                              <FormDescription>
-                                Your email password or app password
-                              </FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-
-                      <FormField
-                        control={form.control}
-                        name="fromEmail"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>From Email</FormLabel>
-                            <FormControl>
-                              <Input placeholder="noreply@yourapp.com" {...field} />
-                            </FormControl>
-                            <FormDescription>
-                              The email address that will appear as the sender
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </>
-                  ) : (
-                    <>
-                      <FormField
-                        control={form.control}
-                        name="service"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>API Service</FormLabel>
-                            <Select
-                              onValueChange={field.onChange}
-                              defaultValue={field.value}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select API service" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="emailjs">EmailJS</SelectItem>
-                                <SelectItem value="sendgrid">SendGrid</SelectItem>
-                                <SelectItem value="mailchimp">Mailchimp</SelectItem>
-                                <SelectItem value="custom">Other</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormDescription>
-                              Select your email API service
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="apiKey"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>API Key</FormLabel>
-                            <FormControl>
-                              <Input type="password" placeholder="Your API key" {...field} />
-                            </FormControl>
-                            <FormDescription>
-                              The API key for your email service
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="fromEmail"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>From Email</FormLabel>
-                            <FormControl>
-                              <Input placeholder="noreply@yourapp.com" {...field} />
-                            </FormControl>
-                            <FormDescription>
-                              The email address that will appear as the sender
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </>
-                  )}
-
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <Button type="submit" disabled={isLoading}>
-                      {isLoading ? (
-                        <>
-                          <span className="mr-2">Saving...</span>
-                          <span className="animate-spin">⏳</span>
-                        </>
-                      ) : (
-                        <>
-                          <Server className="mr-2 h-4 w-4" />
-                          Save Settings
-                        </>
-                      )}
-                    </Button>
-                    
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      onClick={handleTestEmail}
-                      disabled={isLoading}
-                    >
-                      {isLoading ? (
-                        <>
-                          <span className="mr-2">Testing...</span>
-                          <span className="animate-spin">⏳</span>
-                        </>
-                      ) : (
-                        <>
-                          <Send className="mr-2 h-4 w-4" />
-                          Send Test Email
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </form>
-              </Form>
-            </CardContent>
-          </Card>
-        </TabsContent>
+        {isAdmin && (
+          <TabsContent value="admin" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <ShieldAlert className="mr-2 h-5 w-5" />
+                  Admin Settings
+                </CardTitle>
+                <CardDescription>
+                  These settings are only available to administrators
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Alert className="mb-6">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Admin Only</AlertTitle>
+                  <AlertDescription>
+                    These settings affect system-wide configurations and should be changed with caution.
+                  </AlertDescription>
+                </Alert>
+                
+                <React.Suspense fallback={<div className="p-4 text-center">Loading admin settings...</div>}>
+                  <AdminOnlySettings />
+                </React.Suspense>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );
