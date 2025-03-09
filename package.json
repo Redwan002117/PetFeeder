@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "homepage": "https://petfeeder.redwancodes.com",
+  "homepage": "https://redwan002117.github.io/PetFeeder",
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
     "@firebase/app": "^0.9.25",
@@ -71,8 +71,6 @@
     "deploy": "gh-pages -d dist",
     "deploy:firebase": "firebase deploy",
     "deploy:hosting": "firebase deploy --only hosting",
-    "deploy:netlify": "netlify deploy --prod",
-    "netlify:dev": "netlify dev",
     "analyze": "source-map-explorer 'dist/assets/*.js'",
     "clean": "rimraf dist",
     "type-check": "tsc --noEmit",
