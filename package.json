@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "homepage": "https://redwan002117.github.io/PetFeeder",
+  "homepage": "https://petfeeder.redwancodes.com",
   "dependencies": {
     "@firebase/app": "^0.9.25",
     "@firebase/auth": "^1.5.1",

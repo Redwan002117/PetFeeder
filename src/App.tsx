@@ -1,4 +1,4 @@
-import { HashRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import Home from './pages/Home';
 import Login from './pages/Login';
@@ -18,6 +18,7 @@ import VerifyEmail from './pages/VerifyEmail';
 import UsernameSetup from './pages/UsernameSetup';
 import Settings from './pages/Settings';
 import FoodLevels from './pages/FoodLevels';
+import PetProfiles from './pages/PetProfiles';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
@@ -99,6 +100,11 @@ export function App() {
                   <Route path="/food-levels" element={
                     <ProtectedRoute>
                       <FoodLevels />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/pets" element={
+                    <ProtectedRoute>
+                      <PetProfiles />
                     </ProtectedRoute>
                   } />
                   

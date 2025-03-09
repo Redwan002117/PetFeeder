@@ -219,8 +219,8 @@ const Profile = () => {
           user_email: currentUser.email,
           user_name: currentUser.displayName || 'Unknown User',
           request_date: new Date().toLocaleString(),
-          approve_url: `https://redwan002117.github.io/PetFeeder/#/admin/approve-request?userId=${currentUser.uid}&requestId=${requestId}`,
-          deny_url: `https://redwan002117.github.io/PetFeeder/#/admin/deny-request?userId=${currentUser.uid}&requestId=${requestId}`
+          approve_url: `https://petfeeder.redwancodes.com/admin/approve-request?userId=${currentUser.uid}&requestId=${requestId}`,
+          deny_url: `https://petfeeder.redwancodes.com/admin/deny-request?userId=${currentUser.uid}&requestId=${requestId}`
         };
         
         // Send the email using EmailJS

@@ -322,7 +322,7 @@ export const UserManagement: React.FC = () => {
                   onCheckedChange={(checked) => setEditPermissions({...editPermissions, canViewStats: checked})}
                 />
               </div>
-            </div>
+      </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setEditingUser(null)}>Cancel</Button>
               <Button onClick={handleSaveUser}>Save Changes</Button>

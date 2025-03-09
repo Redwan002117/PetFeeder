@@ -321,7 +321,7 @@ function Home() {
             >
               <div className="h-12 w-12 bg-amber-100 dark:bg-amber-900 rounded-full flex items-center justify-center mb-4">
                 <Smartphone className="h-6 w-6 text-amber-600 dark:text-amber-400" />
-              </div>
+            </div>
               <h3 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Device Status</h3>
               <p className="text-gray-600 dark:text-gray-400 mb-4">
                 {deviceLoading ? (
@@ -399,8 +399,8 @@ function Home() {
                     <div className="text-center p-6">
                       <PawPrint size={64} className="mx-auto mb-4 text-indigo-500" />
                       <p className="text-gray-600 dark:text-gray-400">Pet Feeder Device</p>
-                    </div>
-                  </div>
+          </div>
+        </div>
                 )}
               </motion.div>
             </div>
@@ -701,7 +701,7 @@ function Home() {
                 Learn More
               </Button>
             </motion.div>
-          </div>
+        </div>
         </motion.div>
         
         <motion.div 
@@ -740,7 +740,7 @@ function Home() {
             >
               <Linkedin size={24} />
             </motion.a>
-          </div>
+      </div>
           <motion.p 
             className="text-gray-600 dark:text-gray-400 flex items-center justify-center"
             animate={{ 

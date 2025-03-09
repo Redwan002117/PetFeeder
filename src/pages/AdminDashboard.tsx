@@ -267,9 +267,9 @@ const AdminDashboard = () => {
                 <p className="text-xs text-gray-500 mt-1">
                   3 offline, 9 online
                 </p>
-              </CardContent>
-            </Card>
-            
+          </CardContent>
+        </Card>
+        
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Feedings Today</CardTitle>
@@ -279,9 +279,9 @@ const AdminDashboard = () => {
                 <p className="text-xs text-gray-500 mt-1">
                   32 scheduled, 16 manual
                 </p>
-              </CardContent>
-            </Card>
-            
+          </CardContent>
+        </Card>
+        
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400">System Status</CardTitle>
@@ -291,16 +291,16 @@ const AdminDashboard = () => {
                 <p className="text-xs text-gray-500 mt-1">
                   All systems operational
                 </p>
-              </CardContent>
-            </Card>
-          </div>
-          
+          </CardContent>
+        </Card>
+      </div>
+
           {/* Rest of the overview content */}
         </TabsContent>
 
         <TabsContent value="users">
           <Card className="mb-6">
-            <CardHeader>
+        <CardHeader>
               <CardTitle className="flex items-center">
                 <Users className="mr-2 h-5 w-5 text-indigo-600" />
                 User Management
@@ -308,8 +308,8 @@ const AdminDashboard = () => {
               <CardDescription>
                 Manage user accounts and permissions
               </CardDescription>
-            </CardHeader>
-            <CardContent>
+        </CardHeader>
+        <CardContent>
               <UserManagement />
             </CardContent>
           </Card>
@@ -330,8 +330,8 @@ const AdminDashboard = () => {
               <DeviceManagement />
             </CardContent>
           </Card>
-        </TabsContent>
-
+            </TabsContent>
+            
         <TabsContent value="analytics">
           <Card className="mb-6">
             <CardHeader>
@@ -347,8 +347,8 @@ const AdminDashboard = () => {
               <Analytics />
             </CardContent>
           </Card>
-        </TabsContent>
-
+            </TabsContent>
+            
         <TabsContent value="logs">
           <Card className="mb-6">
             <CardHeader>
@@ -362,8 +362,8 @@ const AdminDashboard = () => {
             </CardHeader>
             <CardContent>
               <SystemLogs />
-            </CardContent>
-          </Card>
+        </CardContent>
+      </Card>
         </TabsContent>
 
         <TabsContent value="settings">
@@ -376,7 +376,7 @@ const AdminDashboard = () => {
               <CardDescription>
                 Configure admin dashboard settings
               </CardDescription>
-            </CardHeader>
+        </CardHeader>
             <CardContent>
               <div className="space-y-6">
                 <div>
@@ -386,19 +386,19 @@ const AdminDashboard = () => {
                     <p className="text-red-700 dark:text-red-300 text-sm mb-4">
                       This action will permanently delete all user accounts except for admin accounts.
                       This cannot be undone.
-                    </p>
-                    <Button 
-                      variant="destructive" 
-                      onClick={handleDeleteAllUsers}
-                      disabled={isLoading}
-                    >
-                      {isLoading ? "Processing..." : "Delete All Users"}
-                    </Button>
+            </p>
+            <Button 
+              variant="destructive" 
+              onClick={handleDeleteAllUsers}
+              disabled={isLoading}
+            >
+              {isLoading ? "Processing..." : "Delete All Users"}
+            </Button>
                   </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+          </div>
+        </CardContent>
+      </Card>
         </TabsContent>
       </Tabs>
     </div>
