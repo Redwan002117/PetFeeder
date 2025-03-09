@@ -1070,13 +1070,9 @@ export {
 
 // Export database functions
 export {
-  ref,
-  set,
   onValue,
   off,
   push,
-  update,
   remove,
-  get,
   serverTimestamp
 };

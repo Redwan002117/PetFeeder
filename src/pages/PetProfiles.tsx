@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Edit, Trash2, Cat, Dog, Rabbit, Bird, Fish, Paw, Camera, Loader2 } from "lucide-react";
+import { PlusCircle, Edit, Trash2, Cat, Dog, Rabbit, Bird, Fish, Camera, Loader2, PawPrint } from "lucide-react";
 import PageHeader from '@/components/PageHeader';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -308,7 +308,7 @@ const PetProfiles = () => {
       case 'fish':
         return <Fish className="h-5 w-5" />;
       default:
-        return <Paw className="h-5 w-5" />;
+        return <PawPrint className="h-5 w-5" />;
     }
   };
 
@@ -320,7 +320,7 @@ const PetProfiles = () => {
     <div className="container mx-auto py-8 px-4">
       <PageHeader 
         title="Pet Profiles" 
-        icon={<Paw size={28} />}
+        icon={<PawPrint size={28} />}
         description="Manage your pets' information and feeding preferences"
       />
 
@@ -334,7 +334,7 @@ const PetProfiles = () => {
       {pets.length === 0 ? (
         <Card className="text-center py-12">
           <CardContent>
-            <Paw className="h-16 w-16 mx-auto mb-4 text-gray-400" />
+            <PawPrint className="h-16 w-16 mx-auto mb-4 text-gray-400" />
             <h3 className="text-xl font-medium mb-2">No Pets Added Yet</h3>
             <p className="text-gray-500 mb-6">Add your pets to customize their feeding schedules and track their nutrition.</p>
             <Button onClick={() => setAddDialogOpen(true)} className="flex items-center gap-2 mx-auto">
