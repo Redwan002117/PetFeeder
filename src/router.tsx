@@ -1,4 +1,4 @@
-import { HashRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, HashRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import Home from './pages/Home';
 import Login from './pages/Login';
@@ -25,6 +25,10 @@ import { NotificationProvider } from './contexts/NotificationContext';
 import { DeviceProvider } from './contexts/DeviceContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { useEffect } from 'react';
+
+// Determine if we're using a custom domain by checking if we're at the root path
+const isCustomDomain = window.location.pathname.indexOf('/PetFeeder') === -1;
+const Router = isCustomDomain ? BrowserRouter : HashRouter;
 
 export function AppRouter() {
   // Apply dark mode class based on localStorage preference
