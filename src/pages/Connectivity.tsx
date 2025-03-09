@@ -211,7 +211,7 @@ const Connectivity = ({ standalone = true }: ConnectivityProps) => {
                 </span>
               </div>
               {deviceStatus?.lastSeen && (
-                <div className="flex justify-between items-center">
+                <div key="last-seen" className="flex justify-between items-center">
                   <span className="text-sm font-medium">Last Seen:</span>
                   <span className="text-sm text-gray-600">
                     {new Date(deviceStatus.lastSeen).toLocaleString()}
@@ -219,7 +219,7 @@ const Connectivity = ({ standalone = true }: ConnectivityProps) => {
                 </div>
               )}
               {deviceStatus?.batteryLevel !== undefined && (
-                <div className="flex justify-between items-center">
+                <div key="battery-level" className="flex justify-between items-center">
                   <span className="text-sm font-medium">Battery Level:</span>
                   <span className="text-sm text-gray-600">
                     {deviceStatus.batteryLevel}%
@@ -227,7 +227,7 @@ const Connectivity = ({ standalone = true }: ConnectivityProps) => {
                 </div>
               )}
               {deviceStatus?.firmwareVersion && (
-                <div className="flex justify-between items-center">
+                <div key="firmware-version" className="flex justify-between items-center">
                   <span className="text-sm font-medium">Firmware:</span>
                   <span className="text-sm text-gray-600">
                     {deviceStatus.firmwareVersion}
@@ -255,7 +255,7 @@ const Connectivity = ({ standalone = true }: ConnectivityProps) => {
                 </span>
               </div>
               {deviceStatus?.wifiName && (
-                <div className="flex justify-between items-center">
+                <div key="wifi-name" className="flex justify-between items-center">
                   <span className="text-sm font-medium">Network:</span>
                   <span className="text-sm text-gray-600">
                     {deviceStatus.wifiName}
@@ -263,7 +263,7 @@ const Connectivity = ({ standalone = true }: ConnectivityProps) => {
                 </div>
               )}
               {deviceStatus?.ipAddress && (
-                <div className="flex justify-between items-center">
+                <div key="ip-address" className="flex justify-between items-center">
                   <span className="text-sm font-medium">IP Address:</span>
                   <span className="text-sm text-gray-600">
                     {deviceStatus.ipAddress}
@@ -271,11 +271,11 @@ const Connectivity = ({ standalone = true }: ConnectivityProps) => {
                 </div>
               )}
               {deviceStatus?.signalStrength && (
-                <div className="flex justify-between items-center">
+                <div key="signal-strength" className="flex justify-between items-center">
                   <span className="text-sm font-medium">Signal Strength:</span>
                   <span className="text-sm text-gray-600 flex items-center">
                     {renderNetworkStrength(deviceStatus.signalStrength)}
-                    {deviceStatus.signalStrength}%
+                    <span className="ml-1">{deviceStatus.signalStrength}%</span>
                   </span>
                 </div>
               )}
