@@ -21,6 +21,13 @@ import { useToast } from "@/hooks/use-toast";
 import PageHeader from '@/components/PageHeader';
 import { Spinner } from '@/components/Spinner';
 
+// Add motion imports for animations
+import { motion } from "framer-motion";
+
+// Add additional imports for health tracking
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { format, parseISO, subDays } from 'date-fns';
+
 interface Pet {
   id: string;
   name: string;
@@ -46,6 +53,66 @@ interface HealthRecord {
   notes?: string;
   timestamp: number;
 }
+
+// Add animation variants
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: { 
+    opacity: 1,
+    transition: { 
+      staggerChildren: 0.1
+    }
+  }
+};
+
+const itemVariants = {
+  hidden: { y: 20, opacity: 0 },
+  visible: { 
+    y: 0, 
+    opacity: 1,
+    transition: { type: 'spring', stiffness: 300, damping: 24 }
+  }
+};
+
+// Add health stats calculation function
+const calculateHealthStats = (records: HealthRecord[]) => {
+  if (!records || records.length === 0) return null;
+  
+  // Get weight data for chart
+  const weightData = records
+    .slice(0, 10) // Get last 10 records
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) // Sort by date ascending
+    .map(record => ({
+      date: format(parseISO(record.date), 'MMM dd'),
+      weight: record.weight
+    }));
+  
+  // Calculate average weight
+  const totalWeight = records.reduce((sum, record) => sum + record.weight, 0);
+  const avgWeight = records.length > 0 ? (totalWeight / records.length).toFixed(1) : 0;
+  
+  // Calculate weight change
+  const oldestRecord = records[records.length - 1];
+  const newestRecord = records[0];
+  const weightChange = newestRecord && oldestRecord 
+    ? (newestRecord.weight - oldestRecord.weight).toFixed(1)
+    : 0;
+  
+  // Calculate activity level distribution
+  const activityLevels = {
+    low: records.filter(r => r.activityLevel === 'low').length,
+    normal: records.filter(r => r.activityLevel === 'normal').length,
+    high: records.filter(r => r.activityLevel === 'high').length
+  };
+  
+  return {
+    weightData,
+    avgWeight,
+    weightChange,
+    activityLevels,
+    recordCount: records.length
+  };
+};
 
 const PetProfiles = () => {
   const { currentUser } = useAuth();
@@ -950,12 +1017,13 @@ const PetProfiles = () => {
             </TabsContent>
             
             <TabsContent value="health">
-              <div className="space-y-4 py-2">
+              <div className="space-y-6 py-2">
                 <div className="flex justify-between items-center">
                   <h3 className="text-lg font-medium">Health Records</h3>
                   <Button 
                     onClick={() => setShowAddHealthRecord(true)}
                     size="sm"
+                    className="bg-green-600 hover:bg-green-700 text-white"
                   >
                     <Plus className="h-4 w-4 mr-1" />
                     Add Record
@@ -963,55 +1031,162 @@ const PetProfiles = () => {
                 </div>
                 
                 {loadingHealthRecords ? (
-                  <div className="flex justify-center items-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  <div className="flex justify-center items-center py-16">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
                   </div>
                 ) : healthRecords && healthRecords.length > 0 ? (
-                  <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
-                    {healthRecords.map((record) => (
-                      <div 
-                        key={record.id} 
-                        className="p-4 border rounded-md bg-gray-50 dark:bg-gray-800"
-                      >
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="flex items-center space-x-2">
-                            <Calendar className="h-4 w-4 text-gray-500" />
-                            <span className="font-medium">{formatDate(record.date)}</span>
+                  <motion.div
+                    variants={containerVariants}
+                    initial="hidden"
+                    animate="visible"
+                    className="space-y-6"
+                  >
+                    {/* Health Stats Overview */}
+                    {(() => {
+                      const stats = calculateHealthStats(healthRecords);
+                      if (!stats) return null;
+                      
+                      return (
+                        <motion.div 
+                          variants={itemVariants}
+                          className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4"
+                        >
+                          <h4 className="text-md font-medium mb-3">Health Overview</h4>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                            <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-md">
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Average Weight</p>
+                              <p className="text-xl font-bold">{stats.avgWeight} kg</p>
+                            </div>
+                            
+                            <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-md">
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Weight Change</p>
+                              <p className={`text-xl font-bold ${Number(stats.weightChange) > 0 ? 'text-green-600' : Number(stats.weightChange) < 0 ? 'text-red-600' : ''}`}>
+                                {Number(stats.weightChange) > 0 ? '+' : ''}{stats.weightChange} kg
+                              </p>
+                            </div>
+                            
+                            <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-md">
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Records</p>
+                              <p className="text-xl font-bold">{stats.recordCount}</p>
+                            </div>
                           </div>
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => deleteHealthRecord(record.id)}
-                            className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                          
+                          {stats.weightData.length > 1 && (
+                            <div className="h-48 mt-4">
+                              <p className="text-sm font-medium mb-2">Weight Trend</p>
+                              <ResponsiveContainer width="100%" height="100%">
+                                <LineChart
+                                  data={stats.weightData}
+                                  margin={{ top: 5, right: 5, left: 0, bottom: 5 }}
+                                >
+                                  <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                                  <XAxis 
+                                    dataKey="date" 
+                                    tick={{ fontSize: 12 }}
+                                    tickMargin={5}
+                                  />
+                                  <YAxis 
+                                    tick={{ fontSize: 12 }}
+                                    tickMargin={5}
+                                    domain={['dataMin - 0.5', 'dataMax + 0.5']}
+                                  />
+                                  <Tooltip />
+                                  <Line 
+                                    type="monotone" 
+                                    dataKey="weight" 
+                                    stroke="#3b82f6" 
+                                    strokeWidth={2}
+                                    dot={{ r: 4 }}
+                                    activeDot={{ r: 6 }}
+                                  />
+                                </LineChart>
+                              </ResponsiveContainer>
+                            </div>
+                          )}
+                        </motion.div>
+                      );
+                    })()}
+                    
+                    {/* Health Records List */}
+                    <motion.div variants={itemVariants}>
+                      <h4 className="text-md font-medium mb-3">Recent Records</h4>
+                      <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+                        {healthRecords.map((record, index) => (
+                          <motion.div 
+                            key={record.id}
+                            variants={itemVariants}
+                            className="p-4 border rounded-md bg-gray-50 dark:bg-gray-800 shadow-sm hover:shadow-md transition-shadow duration-200"
+                            whileHover={{ scale: 1.01 }}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ 
+                              opacity: 1, 
+                              y: 0,
+                              transition: { delay: index * 0.05 } 
+                            }}
                           >
-                            <XCircle className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-4 mb-2">
-                          <div className="flex items-center space-x-2">
-                            <Weight className="h-4 w-4 text-gray-500" />
-                            <span className="text-sm">{record.weight} kg</span>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <Activity className="h-4 w-4 text-gray-500" />
-                            <span className="text-sm capitalize">{record.activityLevel} activity</span>
-                          </div>
-                        </div>
-                        
-                        {record.notes && (
-                          <div className="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                            {record.notes}
-                          </div>
-                        )}
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="flex items-center space-x-2">
+                                <Calendar className="h-4 w-4 text-blue-500" />
+                                <span className="font-medium">{formatDate(record.date)}</span>
+                              </div>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => deleteHealthRecord(record.id)}
+                                className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full"
+                              >
+                                <XCircle className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-4 mb-2">
+                              <div className="flex items-center space-x-2">
+                                <Weight className="h-4 w-4 text-green-500" />
+                                <span className="text-sm">{record.weight} kg</span>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <Activity className="h-4 w-4 text-purple-500" />
+                                <span className="text-sm capitalize">
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                                    record.activityLevel === 'high' ? 'bg-green-100 text-green-800' :
+                                    record.activityLevel === 'low' ? 'bg-red-100 text-red-800' :
+                                    'bg-blue-100 text-blue-800'
+                                  }`}>
+                                    {record.activityLevel}
+                                  </span>
+                                </span>
+                              </div>
+                            </div>
+                            
+                            {record.notes && (
+                              <div className="mt-2 text-sm text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 p-2 rounded">
+                                {record.notes}
+                              </div>
+                            )}
+                          </motion.div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </motion.div>
+                  </motion.div>
                 ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    <Heart className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                    <p>No health records yet. Add your first record to start tracking {selectedPet?.name}'s health.</p>
-                  </div>
+                  <motion.div 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5 }}
+                    className="text-center py-16 bg-gray-50 dark:bg-gray-800 rounded-lg"
+                  >
+                    <Heart className="h-16 w-16 mx-auto mb-4 text-gray-300 animate-pulse" />
+                    <p className="text-gray-500 mb-4">No health records yet. Add your first record to start tracking {selectedPet?.name}'s health.</p>
+                    <Button 
+                      onClick={() => setShowAddHealthRecord(true)}
+                      variant="outline"
+                      className="mt-2"
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Add First Record
+                    </Button>
+                  </motion.div>
                 )}
               </div>
             </TabsContent>
@@ -1059,8 +1234,18 @@ const PetProfiles = () => {
             </DialogDescription>
           </DialogHeader>
           
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
+          <motion.div 
+            className="space-y-4 py-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3 }}
+          >
+            <motion.div 
+              className="space-y-2"
+              initial={{ x: -20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ delay: 0.1 }}
+            >
               <Label htmlFor="record-date">Date</Label>
               <Input 
                 id="record-date" 
@@ -1068,9 +1253,14 @@ const PetProfiles = () => {
                 value={newHealthRecord.date}
                 onChange={(e) => setNewHealthRecord({...newHealthRecord, date: e.target.value})}
               />
-            </div>
+            </motion.div>
             
-            <div className="space-y-2">
+            <motion.div 
+              className="space-y-2"
+              initial={{ x: -20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ delay: 0.2 }}
+            >
               <Label htmlFor="record-weight">Weight (kg)</Label>
               <Input 
                 id="record-weight" 
@@ -1080,9 +1270,14 @@ const PetProfiles = () => {
                 value={newHealthRecord.weight}
                 onChange={(e) => setNewHealthRecord({...newHealthRecord, weight: e.target.value})}
               />
-            </div>
+            </motion.div>
             
-            <div className="space-y-2">
+            <motion.div 
+              className="space-y-2"
+              initial={{ x: -20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ delay: 0.3 }}
+            >
               <Label htmlFor="record-activity">Activity Level</Label>
               <Select 
                 value={newHealthRecord.activityLevel}
@@ -1097,9 +1292,14 @@ const PetProfiles = () => {
                   <SelectItem value="high">High</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
+            </motion.div>
             
-            <div className="space-y-2">
+            <motion.div 
+              className="space-y-2"
+              initial={{ x: -20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ delay: 0.4 }}
+            >
               <Label htmlFor="record-food">Food Intake</Label>
               <Select 
                 value={newHealthRecord.foodIntake}
@@ -1114,9 +1314,14 @@ const PetProfiles = () => {
                   <SelectItem value="high">High</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
+            </motion.div>
             
-            <div className="space-y-2">
+            <motion.div 
+              className="space-y-2"
+              initial={{ x: -20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ delay: 0.5 }}
+            >
               <Label htmlFor="record-notes">Notes</Label>
               <Textarea 
                 id="record-notes" 
@@ -1124,8 +1329,8 @@ const PetProfiles = () => {
                 value={newHealthRecord.notes}
                 onChange={(e) => setNewHealthRecord({...newHealthRecord, notes: e.target.value})}
               />
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
           
           <DialogFooter>
             <Button 
@@ -1137,6 +1342,7 @@ const PetProfiles = () => {
             <Button 
               onClick={addHealthRecord}
               disabled={!newHealthRecord.weight || isNaN(parseFloat(newHealthRecord.weight))}
+              className="bg-green-600 hover:bg-green-700"
             >
               Save Record
             </Button>

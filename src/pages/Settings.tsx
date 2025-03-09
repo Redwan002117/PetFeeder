@@ -29,6 +29,7 @@ import {
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { safeGet, safeUpdate, safeSet, safeOnValue } from "@/lib/firebase-utils";
 import { Textarea } from "@/components/ui/textarea";
+import { useNavigate } from "react-router-dom";
 
 // Import react-hook-form and zod only if the user is an admin
 // This prevents the build error when these modules aren't used
@@ -54,6 +55,7 @@ const Settings = () => {
   const [qrCodeUrl, setQrCodeUrl] = useState("");
   const [sessions, setSessions] = useState([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
+  const navigate = useNavigate();
 
   const handleSoundToggle = () => {
     const newSoundEnabled = !soundEnabled;
@@ -591,16 +593,16 @@ const Settings = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-2">
                   <Lock className="h-5 w-5 text-gray-500" />
                   <Label htmlFor="2fa-toggle">Enable Two-Factor Authentication</Label>
-                </div>
+                        </div>
                 <Switch 
                   id="2fa-toggle" 
                   checked={twoFactorEnabled}
                   onCheckedChange={handleTwoFactorToggle}
                 />
-              </div>
+                        </div>
               <p className="text-sm text-gray-500">
                 When enabled, you will be required to enter a verification code from your authenticator app in addition to your password when logging in.
               </p>
@@ -749,7 +751,7 @@ const Settings = () => {
                       {!session.isCurrent && (
                         <Button 
                           variant="outline" 
-                          size="sm"
+                          size="sm" 
                           onClick={() => revokeSession(session.id)}
                           className="text-red-500 hover:text-red-700 hover:bg-red-50"
                         >
@@ -969,7 +971,7 @@ const Settings = () => {
                     </DialogClose>
                     <Button 
                       type="button" 
-                      onClick={() => window.location.href = '/feeding'}
+                      onClick={() => navigate('/schedule')}
                     >
                       Manage Schedule
                     </Button>
