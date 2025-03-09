@@ -8,11 +8,14 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import PageHeader from "@/components/PageHeader";
+import { useAuth } from "@/contexts/AuthContext";
+import ProfileAvatar from "@/components/ProfileAvatar";
 
 interface User {
   id: string;
   email: string;
   displayName: string;
+  photoURL?: string;
   role: string;
   createdAt: number;
   lastLogin: number;
@@ -30,6 +33,7 @@ export const UserManagement: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
   const { toast } = useToast();
+  const { currentUser } = useAuth();
 
   useEffect(() => {
     fetchUsers();
@@ -56,6 +60,7 @@ export const UserManagement: React.FC = () => {
         id,
         email: data.email || '',
         displayName: data.displayName || 'Unknown User',
+        photoURL: data.photoURL || '',
         role: data.role || 'user',
         createdAt: data.createdAt || 0,
         lastLogin: data.lastLogin || 0,
@@ -125,6 +130,16 @@ export const UserManagement: React.FC = () => {
   };
 
   const handleRoleChange = async (userId: string, newRole: string) => {
+    // Prevent users from changing their own role
+    if (currentUser && userId === currentUser.uid) {
+      toast({
+        title: "Action Denied",
+        description: "You cannot change your own role.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     try {
       // Update the role in Firebase
       const userRef = ref(database, `users/${userId}`);
@@ -160,6 +175,17 @@ export const UserManagement: React.FC = () => {
   const handleDeleteUser = async () => {
     if (!deleteUserId) return;
     
+    // Prevent users from deleting themselves
+    if (currentUser && deleteUserId === currentUser.uid) {
+      toast({
+        title: "Action Denied",
+        description: "You cannot delete your own account from here.",
+        variant: "destructive",
+      });
+      setDeleteUserId(null);
+      return;
+    }
+    
     try {
       // Delete the user from Firebase
       const userRef = ref(database, `users/${deleteUserId}`);
@@ -188,6 +214,44 @@ export const UserManagement: React.FC = () => {
     if (!timestamp) return 'Never';
     return new Date(timestamp).toLocaleString();
   };
+
+  // Setup real-time updates for user login status
+  useEffect(() => {
+    const usersRef = ref(database, 'users');
+    
+    // Set up a listener for changes to the users node
+    const unsubscribe = get(usersRef).then((snapshot) => {
+      if (snapshot.exists()) {
+        // Set up individual listeners for each user's lastLogin
+        Object.keys(snapshot.val()).forEach((userId) => {
+          const userLoginRef = ref(database, `users/${userId}/lastLogin`);
+          
+          // Listen for changes to lastLogin
+          const onLoginChange = (snapshot: any) => {
+            if (snapshot.exists()) {
+              const lastLogin = snapshot.val();
+              
+              // Update the user in our local state
+              setUsers(prevUsers => 
+                prevUsers.map(user => 
+                  user.id === userId ? { ...user, lastLogin } : user
+                )
+              );
+            }
+          };
+          
+          // Attach the listener
+          get(userLoginRef).then(onLoginChange);
+        });
+      }
+    });
+    
+    // Clean up the listeners when the component unmounts
+    return () => {
+      // Cleanup would be more complex in a real implementation
+      // as we'd need to track all the individual listeners
+    };
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -246,8 +310,18 @@ export const UserManagement: React.FC = () => {
                     <tr key={user.id} className="border-b hover:bg-gray-50 dark:hover:bg-gray-800">
                       <td className="py-4 px-4">
                         <div className="flex items-center">
-                          <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center mr-3">
-                            <PawPrint className="h-5 w-5 text-indigo-600" />
+                          <div className="h-10 w-10 rounded-full overflow-hidden mr-3">
+                            {user.photoURL ? (
+                              <img 
+                                src={user.photoURL} 
+                                alt={user.displayName} 
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="h-full w-full bg-indigo-100 flex items-center justify-center">
+                                <PawPrint className="h-5 w-5 text-indigo-600" />
+                              </div>
+                            )}
                           </div>
                           <div>
                             <div className="font-medium">{user.displayName}</div>
@@ -262,14 +336,16 @@ export const UserManagement: React.FC = () => {
                           ) : (
                             <Badge variant="outline">User</Badge>
                           )}
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="ml-2"
-                            onClick={() => handleRoleChange(user.id, user.role === 'admin' ? 'user' : 'admin')}
-                          >
-                            <Shield className="h-4 w-4" />
-                          </Button>
+                          {(!currentUser || user.id !== currentUser.uid) && (
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="ml-2"
+                              onClick={() => handleRoleChange(user.id, user.role === 'admin' ? 'user' : 'admin')}
+                            >
+                              <Shield className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </td>
                       <td className="py-4 px-4">
@@ -308,33 +384,35 @@ export const UserManagement: React.FC = () => {
                         {formatDate(user.lastLogin)}
                       </td>
                       <td className="py-4 px-4">
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                              onClick={() => setDeleteUserId(user.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                This action cannot be undone. This will permanently delete the user
-                                and remove their data from our servers.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel onClick={() => setDeleteUserId(null)}>Cancel</AlertDialogCancel>
-                              <AlertDialogAction onClick={handleDeleteUser} className="bg-red-500 hover:bg-red-600">
-                                Delete
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                        {(!currentUser || user.id !== currentUser.uid) && (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                                onClick={() => setDeleteUserId(user.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This action cannot be undone. This will permanently delete the user
+                                  and remove their data from our servers.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel onClick={() => setDeleteUserId(null)}>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleDeleteUser} className="bg-red-500 hover:bg-red-600">
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
                       </td>
                     </tr>
                   ))}

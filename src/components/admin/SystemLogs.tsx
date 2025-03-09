@@ -26,6 +26,43 @@ export const SystemLogs: React.FC = () => {
 
   useEffect(() => {
     fetchLogs();
+    
+    // Set up real-time updates
+    const logsRef = ref(database, 'logs');
+    
+    const unsubscribe = onValue(logsRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const logsData = snapshot.val();
+        
+        // Convert to array and sort
+        let logsArray = Object.keys(logsData).map(key => ({
+          id: key,
+          ...logsData[key]
+        })) as LogEntry[];
+        
+        // Sort by timestamp (newest first)
+        logsArray.sort((a, b) => b.timestamp - a.timestamp);
+        
+        // Apply filter if needed
+        if (filter !== 'all') {
+          logsArray = logsArray.filter(log => log.level === filter);
+        }
+        
+        // Apply limit
+        logsArray = logsArray.slice(0, limit);
+        
+        setLogs(logsArray);
+      } else {
+        setLogs([]);
+      }
+      
+      setLoading(false);
+    });
+    
+    // Clean up listener
+    return () => {
+      off(logsRef);
+    };
   }, [filter, limit]);
 
   const fetchLogs = async () => {

@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { AlertCircle, Users, Search, UserCog, Info, Shield, AlertTriangle, Lock, UserPlus, BarChart, Server, FileText, Settings } from "lucide-react";
+import { AlertCircle, Users, Search, UserCog, Info, Shield, AlertTriangle, Lock, UserPlus, BarChart, Server, FileText, Settings, Mail } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -17,6 +17,7 @@ import { Analytics } from "@/components/admin/Analytics";
 import { DeviceManagement } from "@/components/admin/DeviceManagement";
 import { SystemLogs } from "@/components/admin/SystemLogs";
 import { UserManagement } from "@/components/admin/UserManagement";
+import AdminOnlySettings from "@/components/AdminOnlySettings";
 
 const AdminDashboard = () => {
   const { isAdmin, isVerifiedAdmin, currentUser } = useAuth();
@@ -239,8 +240,8 @@ const AdminDashboard = () => {
             <span className="hidden md:inline">System Logs</span>
           </TabsTrigger>
           <TabsTrigger value="settings" className="flex items-center">
-            <Settings className="mr-2 h-4 w-4" />
-            <span className="hidden md:inline">Settings</span>
+            <Mail className="mr-2 h-4 w-4" />
+            <span className="hidden md:inline">Email Settings</span>
           </TabsTrigger>
         </TabsList>
 
@@ -370,35 +371,17 @@ const AdminDashboard = () => {
           <Card className="mb-6">
             <CardHeader>
               <CardTitle className="flex items-center">
-                <Settings className="mr-2 h-5 w-5 text-indigo-600" />
-                Admin Settings
+                <Mail className="mr-2 h-5 w-5" />
+                Email Configuration
               </CardTitle>
               <CardDescription>
-                Configure admin dashboard settings
+                Configure system-wide email settings for notifications and admin requests
               </CardDescription>
         </CardHeader>
             <CardContent>
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-lg font-medium mb-2">Danger Zone</h3>
-                  <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4">
-                    <h4 className="text-red-800 dark:text-red-400 font-medium mb-2">Delete All Users</h4>
-                    <p className="text-red-700 dark:text-red-300 text-sm mb-4">
-                      This action will permanently delete all user accounts except for admin accounts.
-                      This cannot be undone.
-            </p>
-            <Button 
-              variant="destructive" 
-              onClick={handleDeleteAllUsers}
-              disabled={isLoading}
-            >
-              {isLoading ? "Processing..." : "Delete All Users"}
-            </Button>
-                  </div>
-                </div>
-          </div>
-        </CardContent>
-      </Card>
+              <AdminOnlySettings />
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
