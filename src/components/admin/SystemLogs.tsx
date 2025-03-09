@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { database, ref, get, onValue, off } from '@/lib/firebase';
+import { database } from '@/lib/firebase';
+import { safeRef, safeGet, safeOnValue } from '@/lib/firebase-utils';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, FileText, AlertCircle, Info, PawPrint } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -25,89 +26,120 @@ export const SystemLogs: React.FC = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    fetchLogs();
-    
-    // Set up real-time updates
-    const logsRef = ref(database, 'logs');
-    
-    const unsubscribe = onValue(logsRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const logsData = snapshot.val();
-        
-        // Convert to array and sort
-        let logsArray = Object.keys(logsData).map(key => ({
-          id: key,
-          ...logsData[key]
-        })) as LogEntry[];
-        
-        // Sort by timestamp (newest first)
-        logsArray.sort((a, b) => b.timestamp - a.timestamp);
-        
-        // Apply filter if needed
-        if (filter !== 'all') {
-          logsArray = logsArray.filter(log => log.level === filter);
-        }
-        
-        // Apply limit
-        logsArray = logsArray.slice(0, limit);
-        
-        setLogs(logsArray);
-      } else {
-        setLogs([]);
-      }
-      
-      setLoading(false);
-    });
-    
-    // Clean up listener
+    const unsubscribe = fetchLogs();
     return () => {
-      off(logsRef);
+      if (unsubscribe) {
+        unsubscribe();
+      }
     };
   }, [filter, limit]);
 
-  const fetchLogs = async () => {
+  const fetchLogs = () => {
     try {
       setLoading(true);
       
-      // Fetch logs from Firebase Realtime Database
-      const logsRef = ref(database, 'logs');
+      // Use safeRef instead of ref
+      const logsRef = safeRef('logs');
       
-      // Get all logs and then filter/sort them
-      const snapshot = await get(logsRef);
-      
-      if (snapshot.exists()) {
-        const logsData = snapshot.val();
-        
-        // Convert the object to an array and sort by timestamp (newest first)
-        let logsArray = Object.keys(logsData).map(key => ({
-          id: key,
-          ...logsData[key]
-        })) as LogEntry[];
-        
-        // Sort by timestamp (newest first)
-        logsArray.sort((a, b) => b.timestamp - a.timestamp);
-        
-        // Apply filter if needed
-        if (filter !== 'all') {
-          logsArray = logsArray.filter(log => log.level === filter);
-        }
-        
-        // Apply limit
-        logsArray = logsArray.slice(0, limit);
-        
-        setLogs(logsArray);
-      } else {
+      if (!logsRef) {
         setLogs([]);
+        setLoading(false);
+        return;
       }
+
+      // Use safeOnValue instead of onValue
+      const unsubscribe = safeOnValue(
+        'logs',
+        (snapshot) => {
+          if (snapshot.exists()) {
+            const logsData = snapshot.val();
+
+            // Convert to array and sort
+            let logsArray = Object.keys(logsData).map(key => ({
+              id: key,
+              ...logsData[key]
+            })) as LogEntry[];
+
+            // Sort by timestamp (newest first)
+            logsArray.sort((a, b) => b.timestamp - a.timestamp);
+
+            // Apply filter if needed
+            if (filter !== 'all') {
+              logsArray = logsArray.filter(log => log.level === filter);
+            }
+
+            // Apply limit
+            logsArray = logsArray.slice(0, limit);
+
+            setLogs(logsArray);
+          } else {
+            setLogs([]);
+          }
+          setLoading(false);
+        },
+        (error) => {
+          console.error("Error fetching logs:", error);
+          toast({
+            title: "Error",
+            description: "Failed to load system logs. Please try again later.",
+            variant: "destructive"
+          });
+          setLoading(false);
+          setLogs([]);
+        }
+      );
+
+      return unsubscribe;
     } catch (error) {
-      console.error('Error fetching logs:', error);
+      console.error("Error setting up logs listener:", error);
       toast({
         title: "Error",
-        description: "Failed to fetch system logs. Please try again.",
-        variant: "destructive",
+        description: "Failed to load system logs. Please try again later.",
+        variant: "destructive"
       });
-    } finally {
       setLoading(false);
+      setLogs([]);
+      return undefined;
+    }
+  };
+
+  const handleExportLogs = () => {
+    try {
+      // Create CSV content
+      const headers = ['Timestamp', 'Level', 'Source', 'Message', 'Details'];
+      const csvContent = [
+        headers.join(','),
+        ...logs.map(log => [
+          new Date(log.timestamp).toISOString(),
+          log.level,
+          log.source,
+          `"${log.message.replace(/"/g, '""')}"`,
+          log.details ? `"${log.details.replace(/"/g, '""')}"` : ''
+        ].join(','))
+      ].join('\n');
+
+      // Create download link
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `system-logs-${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast({
+        title: "Logs Exported",
+        description: "System logs have been exported successfully.",
+      });
+    } catch (error) {
+      console.error("Error exporting logs:", error);
+      toast({
+        title: "Export Failed",
+        description: "Failed to export logs. Please try again.",
+        variant: "destructive"
+      });
     }
   };
 

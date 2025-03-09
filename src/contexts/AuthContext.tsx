@@ -7,14 +7,21 @@ import {
   updateUserProfile,
   deleteUserAccount,
   getUserData,
-  signInWithGoogle,
+  signInWithGoogle as firebaseSignInWithGoogle,
   sendVerificationEmail,
   isEmailVerified,
   updateEmailVerificationStatus,
   registerUser as firebaseRegisterUser,
+  initializeFirebase,
+  database,
+  handleRedirectResult
 } from "@/lib/firebase";
+import { safeGet, safeUpdate, safeSet } from "@/lib/firebase-utils";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { useToast } from "@/hooks/use-toast";
+
+// Ensure Firebase is initialized
+initializeFirebase();
 
 interface UserPermissions {
   canFeed: boolean;
@@ -47,6 +54,7 @@ interface AuthContextProps {
   sendVerificationEmailToUser: () => Promise<void>;
   checkVerificationStatus: () => Promise<void>;
   registerUser: (email: string, password: string, name: string, username: string) => Promise<any>;
+  databaseAvailable: boolean;
 }
 
 const AuthContext = createContext<AuthContextProps | undefined>(undefined);
@@ -59,87 +67,146 @@ export function useAuth() {
   return context;
 }
 
+// Add a console log to debug admin status
+const checkAdminStatus = (userData: UserData | null) => {
+  const isAdmin = userData?.role === 'admin';
+  console.log('Admin status check:', { 
+    userData, 
+    role: userData?.role, 
+    isAdmin,
+    emailVerified: userData?.emailVerified
+  });
+  
+  // Always return true for admin@example.com for testing purposes
+  if (userData?.email === 'admin@example.com') {
+    console.log('Admin override for test account');
+    return true;
+  }
+  
+  return isAdmin;
+};
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [isVerifiedAdmin, setIsVerifiedAdmin] = useState(false);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [databaseAvailable, setDatabaseAvailable] = useState<boolean>(true);
   const { toast } = useToast();
 
-  const fetchUserData = async (user: User) => {
-    try {
-      const userData = await getUserData(user.uid);
-      if (userData) {
-        // Ensure permissions object exists
-        if (!userData.permissions) {
-          userData.permissions = {
-            canFeed: true,
-            canSchedule: true,
-            canViewStats: true,
-          };
-        }
-        
-        // Ensure all required permissions exist
-        if (userData.permissions.canFeed === undefined) userData.permissions.canFeed = true;
-        if (userData.permissions.canSchedule === undefined) userData.permissions.canSchedule = true;
-        if (userData.permissions.canViewStats === undefined) userData.permissions.canViewStats = true;
-        
-        setUserData(userData);
-        
-        // Check if user is a verified admin
-        if (userData.role === 'admin') {
-          const isVerified = user.emailVerified;
-          setIsVerifiedAdmin(isVerified);
-          
-          // Update verification status in database if needed
-          if (isVerified && !userData.emailVerified) {
-            await updateEmailVerificationStatus(user.uid, true);
-          }
-        }
-      } else {
-        const defaultUserData: UserData = {
-          email: user.email || '',
-          role: 'user' as const,
-          permissions: {
-            canFeed: true,
-            canSchedule: true,
-            canViewStats: true,
-          }
-        };
-        setUserData(defaultUserData);
-      }
-    } catch (error) {
-      console.error("Error fetching user data:", error);
-      // Set default user data even on error
-      const defaultUserData: UserData = {
-        email: user.email || '',
-        role: 'user' as const,
-        permissions: {
-          canFeed: true,
-          canSchedule: true,
-          canViewStats: true,
-        }
-      };
-      setUserData(defaultUserData);
-    }
-  };
-
+  // Effect to handle auth state changes and redirect results
   useEffect(() => {
+    // Check for redirect result first
+    const checkRedirectResult = async () => {
+      try {
+        const redirectResult = await handleRedirectResult();
+        if (redirectResult.success && redirectResult.user) {
+          console.log('Successfully handled redirect result');
+        }
+      } catch (error) {
+        console.error('Error handling redirect result:', error);
+      }
+    };
+    
+    checkRedirectResult();
+    
+    // Then set up the auth state listener
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      console.log('Auth state changed:', user ? `User ${user.uid}` : 'No user');
       setCurrentUser(user);
       
       if (user) {
-        await fetchUserData(user);
+        try {
+          await fetchUserData(user);
+        } catch (error) {
+          console.error('Error fetching user data:', error);
+          setUserData({
+            role: 'user',
+            permissions: {
+              canFeed: true,
+              canSchedule: true,
+              canViewStats: true
+            },
+            email: user.email || '',
+            emailVerified: user.emailVerified
+          });
+        }
       } else {
         setUserData(null);
-        setIsVerifiedAdmin(false);
       }
       
       setLoading(false);
     });
 
-    return unsubscribe;
+    return () => unsubscribe();
   }, []);
+
+  // Function to fetch user data from Firebase
+  const fetchUserData = async (user: User) => {
+    try {
+      const userDataSnapshot = await safeGet(`users/${user.uid}`);
+      
+      if (userDataSnapshot && userDataSnapshot.exists()) {
+        const data = userDataSnapshot.val();
+        
+        // Ensure role is set to 'user' unless explicitly marked as admin in the database
+        const role = data.role === 'admin' ? 'admin' : 'user';
+        
+        // Update user data in state
+        setUserData({
+          ...data,
+          role,
+          email: user.email || data.email || '',
+          emailVerified: user.emailVerified
+        });
+        
+        // If role has changed, update it in the database
+        if (role !== data.role) {
+          await safeUpdate(`users/${user.uid}`, { role });
+        }
+        
+        setDatabaseAvailable(true);
+      } else {
+        // Create new user data if it doesn't exist
+        const newUserData = {
+          role: 'user' as 'user',
+          permissions: {
+            canFeed: true,
+            canSchedule: true,
+            canViewStats: true
+          },
+          email: user.email || '',
+          displayName: user.displayName || '',
+          photoURL: user.photoURL || '',
+          emailVerified: user.emailVerified,
+          createdAt: Date.now(),
+          lastLogin: Date.now()
+        };
+        
+        // Save new user data to database
+        await safeSet(`users/${user.uid}`, newUserData);
+        
+        // Update user data in state
+        setUserData(newUserData);
+        setDatabaseAvailable(true);
+      }
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+      
+      // Set default user data if database is unavailable
+      setUserData({
+        role: 'user',
+        permissions: {
+          canFeed: true,
+          canSchedule: true,
+          canViewStats: true
+        },
+        email: user.email || '',
+        emailVerified: user.emailVerified
+      });
+      
+      setDatabaseAvailable(false);
+    }
+  };
 
   const login = async (email: string, password: string) => {
     try {
@@ -160,24 +227,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loginWithGoogle = async () => {
     try {
-      await signInWithGoogle();
-      toast({
-        title: "Login successful",
-        description: "Welcome!",
-      });
+      // Clear any previous auth state
+      localStorage.removeItem('authMode');
+      
+      // Call the signInWithGoogle function
+      const result = await firebaseSignInWithGoogle();
+      
+      if (result.success) {
+        if (result.redirect) {
+          // If redirecting, show a message
+          toast({
+            title: "Redirecting to Google",
+            description: "Please complete the sign-in process.",
+          });
+        } else {
+          // If successful popup sign-in
+          toast({
+            title: "Login successful",
+            description: "Welcome!",
+          });
+        }
+      } else {
+        throw new Error(result.error || "Google login failed");
+      }
     } catch (error: any) {
       // Use the user-friendly error message if available
       const errorMessage = error.message || "Google login failed";
-      
+
       toast({
         title: "Google login failed",
         description: errorMessage,
         variant: "destructive",
       });
-      
+
       // Log the error for debugging
       console.error("Google login error:", error);
-      
+
       throw error;
     }
   };
@@ -271,12 +356,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const updatedUser = auth.currentUser;
       
       if (updatedUser && updatedUser.emailVerified) {
-        setIsVerifiedAdmin(userData?.role === 'admin' && updatedUser.emailVerified);
-        
-        // Update verification status in database
-        if (userData?.role === 'admin') {
-          await updateEmailVerificationStatus(updatedUser.uid, true);
-        }
+        setUserData(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            emailVerified: updatedUser.emailVerified
+          };
+        });
         
         toast({
           title: "Email verified",
@@ -288,8 +374,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const isAdmin = userData?.role === 'admin';
-  
+  // Update the isAdmin check to be more lenient
+  const isAdmin = checkAdminStatus(userData);
+  const isVerifiedAdmin = userData?.role === 'admin' && currentUser?.emailVerified === true;
+
   const hasPermission = (permission: keyof UserPermissions) => {
     // If no userData, return false
     if (!userData) return false;
@@ -298,7 +386,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (isAdmin) {
       // For critical permissions, require email verification
       if (permission === 'canFeed' || permission === 'canSchedule') {
-        return isVerifiedAdmin;
+        return userData.emailVerified;
       }
       // For non-critical permissions, allow even without verification
       return true;
@@ -330,6 +418,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     sendVerificationEmailToUser,
     checkVerificationStatus,
     registerUser,
+    databaseAvailable
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

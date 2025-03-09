@@ -111,6 +111,11 @@ export function AppRouter() {
                       <PetProfiles />
                     </ProtectedRoute>
                   } />
+                  <Route path="/pet-profiles" element={
+                    <ProtectedRoute>
+                      <PetProfiles />
+                    </ProtectedRoute>
+                  } />
                   
                   {/* Admin routes */}
                   <Route path="/admin" element={

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { getAllUsers, updateUserPermissions, updateUserRole, deleteAllUsers } from "@/lib/firebase";
+import { getAllUsers, updateUserRole, deleteAllUsers } from "@/lib/firebase";
+import { safeUpdate } from "@/lib/firebase-utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
@@ -96,16 +97,39 @@ const AdminDashboard = () => {
 
   const handlePermissionChange = async (userId: string, permission: string, value: boolean) => {
     try {
-      await updateUserPermissions(userId, { [permission]: value });
-      toast({
-        title: "Permission updated",
-        description: "User permissions have been updated successfully",
+      const success = await safeUpdate(`users/${userId}/permissions`, {
+        [permission]: value
       });
-    } catch (error: any) {
+
+      if (success) {
+        setUsers({
+          ...users,
+          [userId]: {
+            ...users[userId],
+            permissions: {
+              ...users[userId].permissions,
+              [permission]: value
+            }
+          }
+        });
+
+        toast({
+          title: "Permission Updated",
+          description: `User permission has been updated successfully.`,
+        });
+      } else {
+        toast({
+          title: "Update Failed",
+          description: "Failed to update user permission. Please try again.",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error("Error updating permission:", error);
       toast({
-        title: "Update failed",
-        description: error.message || "Failed to update user permissions",
-        variant: "destructive",
+        title: "Update Failed",
+        description: "An error occurred while updating the permission.",
+        variant: "destructive"
       });
     }
   };
@@ -113,22 +137,31 @@ const AdminDashboard = () => {
   const handlePromoteToAdmin = async () => {
     if (!selectedUser) return;
     
+    setPromoting(true);
     try {
-      setPromoting(true);
       await updateUserRole(selectedUser.id, 'admin');
       
+      setUsers({
+        ...users,
+        [selectedUser.id]: {
+          ...users[selectedUser.id],
+          role: 'admin'
+        }
+      });
+      
       toast({
-        title: "User promoted",
+        title: "User Promoted",
         description: `${selectedUser.displayName || selectedUser.email} has been promoted to admin.`,
       });
       
       setPromoteDialogOpen(false);
       setSelectedUser(null);
-    } catch (error: any) {
+    } catch (error) {
+      console.error("Error promoting user:", error);
       toast({
-        title: "Promotion failed",
-        description: error.message || "Failed to promote user to admin",
-        variant: "destructive",
+        title: "Promotion Failed",
+        description: "Failed to promote user to admin. Please try again.",
+        variant: "destructive"
       });
     } finally {
       setPromoting(false);
@@ -136,25 +169,36 @@ const AdminDashboard = () => {
   };
 
   const handleDeleteAllUsers = async () => {
-    if (window.confirm("WARNING: This will delete ALL users from the database. This action cannot be undone. Are you sure you want to proceed?")) {
-      try {
-        setIsLoading(true);
-        await deleteAllUsers();
-        toast({
-          title: "Success",
-          description: "All users have been deleted from the database",
-          variant: "default",
-        });
-      } catch (error) {
-        console.error("Error deleting users:", error);
-        toast({
-          title: "Error",
-          description: "Failed to delete users",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
+    if (!window.confirm("Are you sure you want to delete all non-admin users? This action cannot be undone.")) {
+      return;
+    }
+    
+    setIsLoading(true);
+    try {
+      await deleteAllUsers();
+      
+      const adminUsers = Object.entries(users).reduce((acc, [id, user]) => {
+        if (user.role === 'admin') {
+          acc[id] = user;
+        }
+        return acc;
+      }, {} as Record<string, any>);
+      
+      setUsers(adminUsers);
+      
+      toast({
+        title: "Users Deleted",
+        description: "All non-admin users have been deleted successfully.",
+      });
+    } catch (error) {
+      console.error("Error deleting users:", error);
+      toast({
+        title: "Deletion Failed",
+        description: "Failed to delete users. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 

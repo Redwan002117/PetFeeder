@@ -15,7 +15,8 @@ import {
   Shield,
   Settings,
   FileText,
-  HandPlatter
+  HandPlatter,
+  PawPrint
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import ProfileAvatar from "@/components/ProfileAvatar";
@@ -156,6 +157,16 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       ],
     },
     {
+      title: "Pets",
+      items: [
+        {
+          icon: <PawPrint size={20} />,
+          text: "Pet Profiles",
+          to: "/pet-profiles",
+        },
+      ],
+    },
+    {
       title: "Device",
       items: [
         {
@@ -165,9 +176,8 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         },
         {
           icon: <Settings size={20} />,
-          text: "Device Settings",
-          to: `/device/${user?.deviceId || ''}`,
-          hidden: !user?.deviceId,
+          text: "Settings",
+          to: "/settings",
         },
       ],
     },

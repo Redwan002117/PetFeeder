@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { useNotifications } from "@/contexts/NotificationContext";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Bell, Volume2, VolumeX, Lock, AlertTriangle, Calendar, HandPlatter, Wifi, Mail, Smartphone, Activity, XCircle, AlertCircle, Settings as SettingsIcon, Server, Key, Send, ShieldAlert } from "lucide-react";
+import { Bell, Volume2, VolumeX, Lock, AlertTriangle, Calendar, HandPlatter, Mail, Smartphone, Activity, XCircle, AlertCircle, Settings as SettingsIcon, Server, Key, Send, ShieldAlert, QrCode, LogOut } from "lucide-react";
 import NotificationSettings from "@/components/NotificationSettings";
 import ChangePasswordForm from "@/components/ChangePasswordForm";
 import { ref, update, get } from "firebase/database";
@@ -16,6 +16,19 @@ import { database } from "@/lib/firebase";
 import PageHeader from "@/components/PageHeader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+  DialogClose
+} from "@/components/ui/dialog";
+import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { safeGet, safeUpdate, safeSet, safeOnValue } from "@/lib/firebase-utils";
+import { Textarea } from "@/components/ui/textarea";
 
 // Import react-hook-form and zod only if the user is an admin
 // This prevents the build error when these modules aren't used
@@ -32,6 +45,15 @@ const Settings = () => {
     localStorage.getItem("emailNotifications") === "enabled"
   );
   const [activeTab, setActiveTab] = React.useState("general");
+  const [scheduleData, setScheduleData] = React.useState(null);
+  const [loadingSchedule, setLoadingSchedule] = React.useState(false);
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [showTwoFactorSetup, setShowTwoFactorSetup] = useState(false);
+  const [twoFactorSecret, setTwoFactorSecret] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
+  const [qrCodeUrl, setQrCodeUrl] = useState("");
+  const [sessions, setSessions] = useState([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
 
   const handleSoundToggle = () => {
     const newSoundEnabled = !soundEnabled;
@@ -89,6 +111,299 @@ const Settings = () => {
     });
   };
 
+  // Function to set up real-time listeners for all data
+  useEffect(() => {
+    if (!currentUser) return;
+    
+    // Set up listeners for all data
+    const unsubscribers = [];
+    
+    // 1. Listen for user data changes (including 2FA status)
+    const userUnsubscribe = safeOnValue(`users/${currentUser.uid}`, (snapshot) => {
+      if (snapshot && snapshot.exists()) {
+        const userData = snapshot.val();
+        setTwoFactorEnabled(userData.twoFactorEnabled || false);
+        
+        // Update other user-related state if needed
+        console.log('User data updated from database:', userData);
+      }
+    });
+    unsubscribers.push(userUnsubscribe);
+    
+    // 2. Listen for session data changes
+    const sessionsUnsubscribe = safeOnValue(`userSessions/${currentUser.uid}`, (snapshot) => {
+      if (snapshot && snapshot.exists()) {
+        const sessionsData = snapshot.val();
+        const sessionsArray = Object.keys(sessionsData).map(key => ({
+          id: key,
+          ...sessionsData[key]
+        }));
+        setSessions(sessionsArray);
+        setLoadingSessions(false);
+        
+        console.log('Sessions data updated from database:', sessionsArray);
+      } else {
+        // No sessions found
+        setSessions([]);
+        setLoadingSessions(false);
+      }
+    });
+    unsubscribers.push(sessionsUnsubscribe);
+    
+    // 4. Listen for feeding schedule data changes
+    const scheduleUnsubscribe = safeOnValue(`feedingSchedules/${currentUser.uid}`, (snapshot) => {
+      if (snapshot && snapshot.exists()) {
+        const scheduleData = snapshot.val();
+        setScheduleData(scheduleData);
+        setLoadingSchedule(false);
+        
+        console.log('Feeding schedule updated from database:', scheduleData);
+      } else {
+        // Set default schedule if none exists
+        setScheduleData({
+          weekdays: [
+            { time: "08:00", amount: 100 },
+            { time: "12:00", amount: 100 },
+            { time: "18:00", amount: 100 }
+          ],
+          weekends: [
+            { time: "09:00", amount: 100 },
+            { time: "13:00", amount: 100 },
+            { time: "19:00", amount: 100 }
+          ],
+          useWeekendSchedule: false
+        });
+        setLoadingSchedule(false);
+      }
+    });
+    unsubscribers.push(scheduleUnsubscribe);
+    
+    // Clean up all listeners when component unmounts
+    return () => {
+      unsubscribers.forEach(unsubscribe => unsubscribe());
+    };
+  }, [currentUser]);
+
+  // Function to fetch feeding schedule
+  const fetchFeedingSchedule = async () => {
+    if (!currentUser) return;
+    
+    setLoadingSchedule(true);
+    try {
+      const scheduleSnapshot = await safeGet(`feedingSchedules/${currentUser.uid}`);
+      if (scheduleSnapshot && scheduleSnapshot.exists()) {
+        setScheduleData(scheduleSnapshot.val());
+      } else {
+        // Set default schedule if none exists
+        setScheduleData({
+          weekdays: [
+            { time: "08:00", amount: 100 },
+            { time: "12:00", amount: 100 },
+            { time: "18:00", amount: 100 }
+          ],
+          weekends: [
+            { time: "09:00", amount: 100 },
+            { time: "13:00", amount: 100 },
+            { time: "19:00", amount: 100 }
+          ],
+          useWeekendSchedule: false
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching feeding schedule:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load feeding schedule. Please try again later.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoadingSchedule(false);
+    }
+  };
+
+  // Function to check if 2FA is enabled
+  useEffect(() => {
+    const checkTwoFactorStatus = async () => {
+      if (!currentUser) return;
+      
+      try {
+        const userDataSnapshot = await safeGet(`users/${currentUser.uid}`);
+        if (userDataSnapshot && userDataSnapshot.exists()) {
+          const userData = userDataSnapshot.val();
+          setTwoFactorEnabled(userData.twoFactorEnabled || false);
+        }
+      } catch (error) {
+        console.error("Error checking 2FA status:", error);
+      }
+    };
+    
+    checkTwoFactorStatus();
+  }, [currentUser]);
+  
+  // Function to toggle 2FA
+  const handleTwoFactorToggle = async () => {
+    if (!currentUser) return;
+    
+    if (twoFactorEnabled) {
+      // Disable 2FA
+      try {
+        await safeUpdate(`users/${currentUser.uid}`, {
+          twoFactorEnabled: false,
+          twoFactorSecret: null
+        });
+        
+        setTwoFactorEnabled(false);
+        setTwoFactorSecret("");
+        setQrCodeUrl("");
+        
+        toast({
+          title: "Two-Factor Authentication Disabled",
+          description: "Your account is now less secure. We recommend enabling 2FA for better security.",
+          variant: "default"
+        });
+      } catch (error) {
+        console.error("Error disabling 2FA:", error);
+        toast({
+          title: "Error",
+          description: "Failed to disable Two-Factor Authentication. Please try again.",
+          variant: "destructive"
+        });
+      }
+    } else {
+      // Show 2FA setup dialog
+      setShowTwoFactorSetup(true);
+      generateTwoFactorSecret();
+    }
+  };
+  
+  // Function to generate 2FA secret
+  const generateTwoFactorSecret = async () => {
+    if (!currentUser) return;
+    
+    try {
+      // In a real app, you would generate a proper TOTP secret
+      // For this demo, we'll create a random string
+      const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+      let secret = '';
+      for (let i = 0; i < 16; i++) {
+        secret += characters.charAt(Math.floor(Math.random() * characters.length));
+      }
+      
+      setTwoFactorSecret(secret);
+      
+      // Generate a fake QR code URL (in a real app, this would be a proper TOTP QR code)
+      const appName = "PetFeeder";
+      const email = currentUser.email || "user";
+      setQrCodeUrl(`https://chart.googleapis.com/chart?chs=200x200&chld=M|0&cht=qr&chl=otpauth://totp/${appName}:${email}%3Fsecret%3D${secret}%26issuer%3D${appName}`);
+    } catch (error) {
+      console.error("Error generating 2FA secret:", error);
+      toast({
+        title: "Error",
+        description: "Failed to set up Two-Factor Authentication. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+  
+  // Function to verify and enable 2FA
+  const verifyAndEnableTwoFactor = async () => {
+    if (!currentUser || !twoFactorSecret) return;
+    
+    // In a real app, you would verify the TOTP code here
+    // For this demo, we'll accept any 6-digit code
+    if (verificationCode.length !== 6 || !/^\d+$/.test(verificationCode)) {
+      toast({
+        title: "Invalid Code",
+        description: "Please enter a valid 6-digit verification code.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    try {
+      await safeUpdate(`users/${currentUser.uid}`, {
+        twoFactorEnabled: true,
+        twoFactorSecret: twoFactorSecret
+      });
+      
+      setTwoFactorEnabled(true);
+      setShowTwoFactorSetup(false);
+      setVerificationCode("");
+      
+      toast({
+        title: "Two-Factor Authentication Enabled",
+        description: "Your account is now more secure with 2FA.",
+        variant: "default"
+      });
+    } catch (error) {
+      console.error("Error enabling 2FA:", error);
+      toast({
+        title: "Error",
+        description: "Failed to enable Two-Factor Authentication. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Function to format date
+  const formatDate = (timestamp) => {
+    if (!timestamp) return 'Unknown';
+    
+    const date = new Date(timestamp);
+    const now = new Date();
+    
+    // If today, show time
+    if (date.toDateString() === now.toDateString()) {
+      return `Today at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    }
+    
+    // If yesterday, show "Yesterday"
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (date.toDateString() === yesterday.toDateString()) {
+      return `Yesterday at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    }
+    
+    // Otherwise show date
+    return date.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
+  };
+
+  // Function to revoke a session
+  const revokeSession = async (sessionId) => {
+    if (!currentUser) return;
+    
+    try {
+      // Don't allow revoking the current session
+      const session = sessions.find(s => s.id === sessionId);
+      if (session.isCurrent) {
+        toast({
+          title: "Cannot Revoke Current Session",
+          description: "You cannot revoke your current session. Please log out instead.",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // Remove the session from Firebase
+      await safeUpdate(`userSessions/${currentUser.uid}`, {
+        [sessionId]: null
+      });
+      
+      toast({
+        title: "Session Revoked",
+        description: "The device has been logged out successfully.",
+        variant: "default"
+      });
+    } catch (error) {
+      console.error("Error revoking session:", error);
+      toast({
+        title: "Error",
+        description: "Failed to revoke session. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
   return (
     <div className="container mx-auto py-8 px-4">
       <PageHeader 
@@ -103,12 +418,11 @@ const Settings = () => {
         value={activeTab}
         onValueChange={setActiveTab}
       >
-        <TabsList className="mb-6 grid grid-cols-2 md:grid-cols-6 max-w-4xl overflow-x-auto">
+        <TabsList className="mb-6 grid grid-cols-2 md:grid-cols-5 max-w-4xl overflow-x-auto">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="feeding">Feeding</TabsTrigger>
-          <TabsTrigger value="connectivity">Connectivity</TabsTrigger>
           {isAdmin && <TabsTrigger value="admin">Admin Settings</TabsTrigger>}
         </TabsList>
         
@@ -221,7 +535,7 @@ const Settings = () => {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
                         <div className="h-8 w-8 rounded-full bg-yellow-100 dark:bg-yellow-900 flex items-center justify-center">
-                          <Wifi className="h-4 w-4 text-yellow-600 dark:text-yellow-300" />
+                          <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-300" />
                         </div>
                         <div>
                           <p className="text-sm font-medium">Connectivity Issues</p>
@@ -288,55 +602,210 @@ const Settings = () => {
                   <Lock className="h-5 w-5 text-gray-500" />
                   <Label htmlFor="2fa-toggle">Enable Two-Factor Authentication</Label>
                 </div>
-                <Switch id="2fa-toggle" />
+                <Switch 
+                  id="2fa-toggle" 
+                  checked={twoFactorEnabled}
+                  onCheckedChange={handleTwoFactorToggle}
+                />
               </div>
               <p className="text-sm text-gray-500">
-                When enabled, you will be required to enter a verification code sent to your phone in addition to your password when logging in.
+                When enabled, you will be required to enter a verification code from your authenticator app in addition to your password when logging in.
               </p>
-              <Button variant="outline" className="mt-2">
-                Set Up Two-Factor Authentication
-              </Button>
+              
+              {!twoFactorEnabled && (
+                <Button 
+                  variant="outline" 
+                  className="mt-2"
+                  onClick={() => {
+                    setShowTwoFactorSetup(true);
+                    generateTwoFactorSecret();
+                  }}
+                >
+                  Set Up Two-Factor Authentication
+                </Button>
+              )}
+              
+              <Dialog open={showTwoFactorSetup} onOpenChange={setShowTwoFactorSetup}>
+                <DialogContent className="sm:max-w-[425px]">
+                  <DialogHeader>
+                    <DialogTitle>Set Up Two-Factor Authentication</DialogTitle>
+                    <DialogDescription>
+                      Scan the QR code with your authenticator app or enter the secret key manually.
+                    </DialogDescription>
+                  </DialogHeader>
+                  
+                  <div className="space-y-4 py-4">
+                    <div className="flex justify-center">
+                      {qrCodeUrl && (
+                        <img 
+                          src={qrCodeUrl} 
+                          alt="QR Code for Two-Factor Authentication" 
+                          className="border border-gray-200 rounded-md"
+                        />
+                      )}
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="secret-key">Secret Key</Label>
+                      <div className="flex items-center space-x-2">
+                        <Input 
+                          id="secret-key" 
+                          value={twoFactorSecret} 
+                          readOnly 
+                          className="font-mono"
+                        />
+                        <Button 
+                          variant="outline" 
+                          size="icon"
+                          onClick={() => {
+                            navigator.clipboard.writeText(twoFactorSecret);
+                            toast({
+                              title: "Copied",
+                              description: "Secret key copied to clipboard",
+                              variant: "default"
+                            });
+                          }}
+                        >
+                          <QrCode className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        If you can't scan the QR code, enter this secret key into your authenticator app.
+                      </p>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="verification-code">Verification Code</Label>
+                      <Input 
+                        id="verification-code" 
+                        value={verificationCode} 
+                        onChange={(e) => setVerificationCode(e.target.value)} 
+                        placeholder="Enter 6-digit code"
+                        maxLength={6}
+                      />
+                      <p className="text-xs text-gray-500">
+                        Enter the 6-digit code from your authenticator app to verify and enable 2FA.
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <DialogFooter>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setShowTwoFactorSetup(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button 
+                      onClick={verifyAndEnableTwoFactor}
+                      disabled={!verificationCode || verificationCode.length !== 6}
+                    >
+                      Verify and Enable
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </CardContent>
           </Card>
           
           <Card>
             <CardHeader>
               <CardTitle>Session Management</CardTitle>
-              <CardDescription>Manage your active sessions</CardDescription>
+              <CardDescription>Manage your active sessions and devices</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
-                  <div className="flex items-center space-x-3">
-                    <Smartphone className="h-5 w-5 text-gray-500" />
-                    <div>
-                      <p className="text-sm font-medium">Current Device</p>
-                      <p className="text-xs text-gray-500">Last active: Just now</p>
-                    </div>
-                  </div>
-                  <div className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                    Active
-                  </div>
+              {loadingSessions ? (
+                <div className="flex justify-center items-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                 </div>
-                
-                <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
-                  <div className="flex items-center space-x-3">
-                    <Smartphone className="h-5 w-5 text-gray-500" />
-                    <div>
-                      <p className="text-sm font-medium">iPhone 13</p>
-                      <p className="text-xs text-gray-500">Last active: 2 days ago</p>
+              ) : (
+                <div className="space-y-4">
+                  {sessions.map((session) => (
+                    <div 
+                      key={session.id} 
+                      className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-md"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <Smartphone className="h-5 w-5 text-gray-500" />
+                        <div>
+                          <div className="flex items-center space-x-2">
+                            <p className="text-sm font-medium">{session.deviceName}</p>
+                            {session.isCurrent && (
+                              <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
+                                Current
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-500">{session.browser} on {session.os}</p>
+                          <p className="text-xs text-gray-500">Last active: {formatDate(session.lastActive)}</p>
+                        </div>
+                      </div>
+                      
+                      {!session.isCurrent && (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => revokeSession(session.id)}
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <LogOut className="h-4 w-4 mr-1" />
+                          Revoke
+                        </Button>
+                      )}
                     </div>
-                  </div>
-                  <Button variant="ghost" size="sm">
-                    <XCircle className="h-4 w-4 mr-1" />
-                    Revoke
-                  </Button>
+                  ))}
+                  
+                  {sessions.length === 0 && (
+                    <div className="text-center py-4 text-gray-500">
+                      No active sessions found.
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
               
-              <Button variant="outline" className="mt-4 w-full">
-                Log Out of All Devices
-              </Button>
+              <div className="pt-2">
+                <p className="text-sm text-gray-500 mb-2">
+                  If you notice any suspicious activity, revoke the session and change your password immediately.
+                </p>
+                <Button 
+                  variant="outline" 
+                  className="w-full text-red-500 hover:text-red-700 hover:bg-red-50"
+                  onClick={() => {
+                    // Sign out from all devices
+                    if (confirm("Are you sure you want to log out from all devices? This will require you to log in again on all your devices.")) {
+                      // In a real app, you would implement a server-side token invalidation
+                      // For this demo, we'll just clear the sessions
+                      if (currentUser) {
+                        safeSet(`userSessions/${currentUser.uid}`, null)
+                          .then(() => {
+                            // Keep only current session
+                            const currentSession = sessions.find(s => s.isCurrent);
+                            if (currentSession) {
+                              safeSet(`userSessions/${currentUser.uid}/current-session`, currentSession);
+                              setSessions([currentSession]);
+                            }
+                            
+                            toast({
+                              title: "Success",
+                              description: "You have been logged out from all other devices.",
+                              variant: "default"
+                            });
+                          })
+                          .catch(error => {
+                            console.error("Error signing out from all devices:", error);
+                            toast({
+                              title: "Error",
+                              description: "Failed to log out from all devices. Please try again.",
+                              variant: "destructive"
+                            });
+                          });
+                      }
+                    }
+                  }}
+                >
+                  Sign Out From All Devices
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -402,92 +871,106 @@ const Settings = () => {
                 <Switch id="weekend-diff" />
               </div>
               
-              <Button variant="outline" className="w-full">
-                <Calendar className="mr-2 h-4 w-4" />
-                View Full Schedule
-              </Button>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="connectivity" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Device Connectivity</CardTitle>
-              <CardDescription>Configure how your device connects to the network</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="connection-type">Connection Type</Label>
-                <Select defaultValue="wifi">
-                  <SelectTrigger id="connection-type">
-                    <SelectValue placeholder="Select connection type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="wifi">Wi-Fi</SelectItem>
-                    <SelectItem value="bluetooth">Bluetooth</SelectItem>
-                    <SelectItem value="ethernet">Ethernet</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label htmlFor="auto-reconnect">Auto-Reconnect</Label>
-                  <p className="text-xs text-gray-500">
-                    Automatically attempt to reconnect when connection is lost
-                  </p>
-                </div>
-                <Switch id="auto-reconnect" defaultChecked />
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label htmlFor="offline-mode">Offline Mode</Label>
-                  <p className="text-xs text-gray-500">
-                    Continue to operate on schedule even when internet connection is lost
-                  </p>
-                </div>
-                <Switch id="offline-mode" defaultChecked />
-              </div>
-              
-              <Button variant="outline" className="w-full">
-                <Activity className="mr-2 h-4 w-4" />
-                Test Connection
-              </Button>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader>
-              <CardTitle>Network Settings</CardTitle>
-              <CardDescription>Configure network settings for your device</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="wifi-name">Wi-Fi Network Name</Label>
-                <Input id="wifi-name" defaultValue="Home Network" />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="wifi-password">Wi-Fi Password</Label>
-                <Input id="wifi-password" type="password" value="••••••••••" />
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label htmlFor="use-static-ip">Use Static IP</Label>
-                  <p className="text-xs text-gray-500">
-                    Use a static IP address instead of DHCP
-                  </p>
-                </div>
-                <Switch id="use-static-ip" />
-              </div>
-              
-              <Button variant="outline" className="w-full">
-                <Wifi className="mr-2 h-4 w-4" />
-                Scan for Networks
-              </Button>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    className="w-full"
+                    onClick={fetchFeedingSchedule}
+                  >
+                    <Calendar className="mr-2 h-4 w-4" />
+                    View Full Schedule
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[625px]">
+                  <DialogHeader>
+                    <DialogTitle>Feeding Schedule</DialogTitle>
+                    <DialogDescription>
+                      Your pet's complete feeding schedule. You can manage this schedule from the Feeding page.
+                    </DialogDescription>
+                  </DialogHeader>
+                  
+                  {loadingSchedule ? (
+                    <div className="flex justify-center items-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                    </div>
+                  ) : scheduleData ? (
+                    <div className="space-y-6">
+                      <div>
+                        <h3 className="text-lg font-medium mb-2">Weekday Schedule</h3>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Time</TableHead>
+                              <TableHead>Amount (g)</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {scheduleData.weekdays && scheduleData.weekdays.map((feeding, index) => (
+                              <TableRow key={`weekday-${index}`}>
+                                <TableCell>{feeding.time}</TableCell>
+                                <TableCell>{feeding.amount}</TableCell>
+                              </TableRow>
+                            ))}
+                            {(!scheduleData.weekdays || scheduleData.weekdays.length === 0) && (
+                              <TableRow>
+                                <TableCell colSpan={2} className="text-center text-muted-foreground">
+                                  No weekday feedings scheduled
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
+                      
+                      {scheduleData.useWeekendSchedule && (
+                        <div>
+                          <h3 className="text-lg font-medium mb-2">Weekend Schedule</h3>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Time</TableHead>
+                                <TableHead>Amount (g)</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {scheduleData.weekends && scheduleData.weekends.map((feeding, index) => (
+                                <TableRow key={`weekend-${index}`}>
+                                  <TableCell>{feeding.time}</TableCell>
+                                  <TableCell>{feeding.amount}</TableCell>
+                                </TableRow>
+                              ))}
+                              {(!scheduleData.weekends || scheduleData.weekends.length === 0) && (
+                                <TableRow>
+                                  <TableCell colSpan={2} className="text-center text-muted-foreground">
+                                    No weekend feedings scheduled
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="py-4 text-center text-muted-foreground">
+                      No feeding schedule found. Set up your schedule on the Feeding page.
+                    </div>
+                  )}
+                  
+                  <DialogFooter>
+                    <DialogClose asChild>
+                      <Button type="button" variant="secondary">Close</Button>
+                    </DialogClose>
+                    <Button 
+                      type="button" 
+                      onClick={() => window.location.href = '/feeding'}
+                    >
+                      Manage Schedule
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </CardContent>
           </Card>
         </TabsContent>

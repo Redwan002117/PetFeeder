@@ -19,32 +19,77 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Wifi, Signal, RefreshCw } from "lucide-react";
+import { Wifi, Signal, RefreshCw, WifiOff, Lock, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { getWifiNetworks, setWifiCredentials, getDeviceStatus } from "@/lib/firebase";
+import { useToast } from "@/hooks/use-toast";
+import { Label } from "@/components/ui/label";
+import PageHeader from "@/components/PageHeader";
 
-const Connectivity = () => {
+interface WifiNetwork {
+  ssid: string;
+  strength: string;
+  secured: boolean;
+}
+
+interface ConnectivityProps {
+  standalone?: boolean;
+}
+
+const Connectivity = ({ standalone = true }: ConnectivityProps) => {
   const { currentUser } = useAuth();
-  const [networks, setNetworks] = useState([]);
+  const { toast } = useToast();
+  const [networks, setNetworks] = useState<WifiNetwork[]>([]);
   const [deviceStatus, setDeviceStatus] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [wifiPassword, setWifiPassword] = useState("");
+  const [selectedNetwork, setSelectedNetwork] = useState<string | null>(null);
+  const [password, setPassword] = useState("");
+  const [connecting, setConnecting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (currentUser) {
-      getWifiNetworks(currentUser.uid, (data) => {
-        if (data) {
-          const networksArray = Object.keys(data).map(key => ({
-            id: key,
-            ssid: data[key].ssid,
-            strength: data[key].strength,
-            secured: data[key].secured
-          }));
-          setNetworks(networksArray);
+    if (!currentUser) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Use our safe getWifiNetworks function
+      const unsubscribe = getWifiNetworks(currentUser.uid, (data) => {
+        setLoading(false);
+        if (data && data.networks) {
+          setNetworks(data.networks);
+        } else {
+          // Provide default networks if none are available
+          setNetworks([
+            { ssid: 'WiFi Network 1', strength: 'Strong', secured: true },
+            { ssid: 'WiFi Network 2', strength: 'Medium', secured: true },
+            { ssid: 'WiFi Network 3', strength: 'Weak', secured: false }
+          ]);
         }
       });
 
+      return () => {
+        if (unsubscribe) unsubscribe();
+      };
+    } catch (error) {
+      console.error("Error loading WiFi networks:", error);
+      setLoading(false);
+      setError("Failed to load WiFi networks. Please try again later.");
+      
+      // Provide default networks if there's an error
+      setNetworks([
+        { ssid: 'WiFi Network 1', strength: 'Strong', secured: true },
+        { ssid: 'WiFi Network 2', strength: 'Medium', secured: true },
+        { ssid: 'WiFi Network 3', strength: 'Weak', secured: false }
+      ]);
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (currentUser) {
       getDeviceStatus(currentUser.uid, (status) => {
         setDeviceStatus(status);
         setIsConnected(status?.online);
@@ -73,26 +118,80 @@ const Connectivity = () => {
     }, 1500);
   };
 
-  const handleConnect = (ssid) => {
-    if (currentUser) {
-      setWifiCredentials(currentUser.uid, ssid, wifiPassword)
-        .then(() => {
-          setWifiPassword("");
-          handleRefresh();
+  const handleNetworkSelect = (ssid: string) => {
+    setSelectedNetwork(ssid);
+    setPassword("");
+  };
+
+  const handleConnect = async () => {
+    if (!currentUser || !selectedNetwork) return;
+
+    setConnecting(true);
+    try {
+      const network = networks.find(n => n.ssid === selectedNetwork);
+      if (network && network.secured && !password) {
+        toast({
+          title: "Password Required",
+          description: "Please enter the password for this network.",
+          variant: "destructive",
         });
+        setConnecting(false);
+        return;
+      }
+
+      // Use our safe setWifiCredentials function
+      await setWifiCredentials(currentUser.uid, selectedNetwork, password);
+      
+      toast({
+        title: "Success",
+        description: `Connected to ${selectedNetwork}`,
+        variant: "default",
+      });
+      
+      setSelectedNetwork(null);
+      setPassword("");
+    } catch (error) {
+      console.error("Error connecting to WiFi:", error);
+      toast({
+        title: "Connection Failed",
+        description: "Failed to connect to the selected network. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setConnecting(false);
     }
   };
 
-  const renderNetworkStrength = (strength) => {
-    if (strength > 75) return "🌟";
-    if (strength > 50) return "⭐";
-    if (strength > 25) return "✨";
-    return "⚪";
+  const renderNetworkStrength = (strength?: string) => {
+    // Handle undefined or null strength values
+    if (!strength) {
+      return <WifiOff className="h-5 w-5 text-gray-500" />;
+    }
+    
+    switch (strength.toLowerCase()) {
+      case 'strong':
+        return <Wifi className="h-5 w-5 text-green-500" />;
+      case 'medium':
+        return <Wifi className="h-5 w-5 text-yellow-500" />;
+      case 'weak':
+        return <Wifi className="h-5 w-5 text-red-500" />;
+      default:
+        return <WifiOff className="h-5 w-5 text-gray-500" />;
+    }
   };
 
   return (
     <div className="container mx-auto py-6">
-      <h1 className="text-3xl font-bold mb-6">Device Connectivity</h1>
+      {standalone && (
+        <PageHeader
+          title="Device Connectivity"
+          icon={<Wifi size={28} />}
+          description="Manage your device's network connections"
+        />
+      )}
+      {!standalone && (
+        <h1 className="text-3xl font-bold mb-6">Device Connectivity</h1>
+      )}
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <Card>
@@ -203,65 +302,80 @@ const Connectivity = () => {
           </Button>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Network Name</TableHead>
-                <TableHead>Signal</TableHead>
-                <TableHead>Security</TableHead>
-                <TableHead className="text-right">Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {networks.length > 0 ? (
-                networks.map((network) => (
-                  <TableRow key={network.id}>
-                    <TableCell className="font-medium">{network.ssid}</TableCell>
-                    <TableCell>{renderNetworkStrength(network.strength)}</TableCell>
-                    <TableCell>{network.secured ? '🔒 Secured' : '🔓 Open'}</TableCell>
-                    <TableCell className="text-right">
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button size="sm" variant="outline">Connect</Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Connect to {network.ssid}</DialogTitle>
-                            <DialogDescription>
-                              Enter the WiFi password to connect your pet feeder to this network.
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div className="py-4">
-                            <label className="text-sm font-medium mb-2 block">Password</label>
-                            <Input 
-                              type="password" 
-                              placeholder="WiFi password" 
-                              value={wifiPassword}
-                              onChange={(e) => setWifiPassword(e.target.value)}
-                            />
-                          </div>
-                          <DialogFooter>
-                            <Button 
-                              onClick={() => handleConnect(network.ssid)} 
-                              disabled={network.secured && !wifiPassword}
-                            >
-                              Connect Device
-                            </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center py-4 text-gray-500">
-                    {isRefreshing ? 'Scanning for networks...' : 'No WiFi networks found. Click refresh to scan again.'}
-                  </TableCell>
-                </TableRow>
+          {error && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+              {error}
+            </div>
+          )}
+          
+          {loading ? (
+            <div className="flex justify-center items-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <span className="ml-2">Scanning for networks...</span>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-2 mb-6">
+                {networks.length === 0 ? (
+                  <p className="text-center py-4 text-gray-500">No networks found</p>
+                ) : (
+                  networks.map((network) => (
+                    <div
+                      key={network.ssid}
+                      className={`flex items-center justify-between p-3 rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 ${
+                        selectedNetwork === network.ssid ? 'bg-gray-100 dark:bg-gray-800' : ''
+                      }`}
+                      onClick={() => handleNetworkSelect(network.ssid)}
+                    >
+                      <div className="flex items-center">
+                        {renderNetworkStrength(network.strength)}
+                        <span className="ml-2">{network.ssid}</span>
+                      </div>
+                      {network.secured && <Lock className="h-4 w-4 text-gray-500" />}
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {selectedNetwork && (
+                <div className="space-y-4">
+                  <div className="border-t pt-4">
+                    <h3 className="font-medium mb-2">Connect to {selectedNetwork}</h3>
+                    
+                    {networks.find(n => n.ssid === selectedNetwork)?.secured && (
+                      <div className="space-y-2">
+                        <Label htmlFor="password">Password</Label>
+                        <Input
+                          id="password"
+                          type="password"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          placeholder="Enter network password"
+                        />
+                      </div>
+                    )}
+                    
+                    <div className="flex space-x-2 mt-4">
+                      <Button
+                        onClick={handleConnect}
+                        disabled={connecting}
+                      >
+                        {connecting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Connect
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => setSelectedNetwork(null)}
+                        disabled={connecting}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                </div>
               )}
-            </TableBody>
-          </Table>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { database, ref, onValue, off, push, update, remove, serverTimestamp } from '@/lib/firebase';
+import { safeRef, safeOnValue, safeUpdate, safePush, safeRemove } from '@/lib/firebase-utils';
+
+// UI Components
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,12 +11,14 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Edit, Trash2, Cat, Dog, Rabbit, Bird, Fish, Camera, Loader2, PawPrint } from "lucide-react";
-import PageHeader from '@/components/PageHeader';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+
+// Icons and Utilities
+import { PlusCircle, Edit, Trash2, Cat, Dog, Rabbit, Bird, Fish, Camera, Loader2, PawPrint, Heart, Weight, Activity, Plus, Calendar, XCircle } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import PageHeader from '@/components/PageHeader';
 import { Spinner } from '@/components/Spinner';
 
 interface Pet {
@@ -29,16 +34,35 @@ interface Pet {
   notes?: string;
   photoURL?: string;
   createdAt: number;
+  healthRecords?: Record<string, HealthRecord>;
+}
+
+interface HealthRecord {
+  id: string;
+  date: string;
+  weight: number;
+  activityLevel: 'low' | 'normal' | 'high';
+  foodIntake: 'low' | 'normal' | 'high';
+  notes?: string;
+  timestamp: number;
 }
 
 const PetProfiles = () => {
   const { currentUser } = useAuth();
+  const { toast } = useToast();
+  
+  // State management
   const [pets, setPets] = useState<Pet[]>([]);
   const [loading, setLoading] = useState(true);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  
+  // Dialog states
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedPet, setSelectedPet] = useState<Pet | null>(null);
+  
+  // Form state
   const [formData, setFormData] = useState({
     name: '',
     type: 'cat',
@@ -51,42 +75,65 @@ const PetProfiles = () => {
     notes: '',
     photoURL: ''
   });
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const { toast } = useToast();
 
+  // Add health record states
+  const [healthRecords, setHealthRecords] = useState<HealthRecord[]>([]);
+  const [loadingHealthRecords, setLoadingHealthRecords] = useState(false);
+  const [showAddHealthRecord, setShowAddHealthRecord] = useState(false);
+  const [newHealthRecord, setNewHealthRecord] = useState({
+    date: new Date().toISOString().split('T')[0],
+    weight: '',
+    notes: '',
+    activityLevel: 'normal',
+    foodIntake: 'normal'
+  });
+
+  // Load pets data
   useEffect(() => {
     if (!currentUser) return;
 
-    const petsRef = ref(database, `users/${currentUser.uid}/pets`);
-    
-    const petsListener = onValue(petsRef, (snapshot) => {
-      if (!snapshot.exists()) {
+    const petsRef = safeRef(`users/${currentUser.uid}/pets`);
+    if (!petsRef) {
+      setPets([]);
+      setLoading(false);
+      return;
+    }
+
+    const unsubscribe = safeOnValue(
+      `users/${currentUser.uid}/pets`,
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const petsData = snapshot.val();
+
+          // Convert to array
+          const petsArray = Object.keys(petsData).map(key => ({
+            id: key,
+            ...petsData[key]
+          }));
+
+          // Sort pets by name
+          petsArray.sort((a, b) => a.name.localeCompare(b.name));
+
+          setPets(petsArray);
+        } else {
+          setPets([]);
+        }
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Error fetching pets:", error);
         setPets([]);
         setLoading(false);
-        return;
       }
-      
-      const petsData = snapshot.val();
-      
-      // Convert to array
-      const petsArray = Object.entries(petsData || {}).map(([id, data]: [string, any]) => ({
-        id,
-        ...data
-      }));
-      
-      // Sort pets by name
-      petsArray.sort((a, b) => a.name.localeCompare(b.name));
-      
-      setPets(petsArray);
-      setLoading(false);
-    });
-    
+    );
+
     // Clean up listener on component unmount
     return () => {
-      off(petsRef);
+      if (unsubscribe) unsubscribe();
     };
   }, [currentUser]);
 
+  // Form handlers
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -115,38 +162,34 @@ const PetProfiles = () => {
     if (!currentUser) return;
     if (!formData.name) {
       toast({
-        title: "Missing Information",
-        description: "Please provide a name for your pet.",
+        title: "Name Required",
+        description: "Please enter a name for your pet.",
         variant: "destructive",
       });
       return;
     }
 
     try {
-      const newPetRef = push(ref(database, `users/${currentUser.uid}/pets`));
-      
-      const newPet = {
+      // Use safePush to generate a unique ID and path
+      const petId = await safePush(`users/${currentUser.uid}/pets`, {
         name: formData.name,
         type: formData.type,
-        breed: formData.breed || null,
+        breed: formData.breed || '',
         age: formData.age ? parseInt(formData.age) : null,
         weight: formData.weight ? parseFloat(formData.weight) : null,
-        feedingSchedule: formData.feedingSchedule || null,
-        foodType: formData.foodType || null,
+        feedingSchedule: formData.feedingSchedule || '',
+        foodType: formData.foodType || '',
         foodAmount: formData.foodAmount ? parseFloat(formData.foodAmount) : null,
-        notes: formData.notes || null,
-        photoURL: formData.photoURL || null,
-        createdAt: serverTimestamp()
-      };
-      
-      await update(newPetRef, newPet);
-      
+        notes: formData.notes || '',
+        photoURL: formData.photoURL || '',
+        createdAt: Date.now()
+      });
+
       toast({
         title: "Pet Added",
         description: `${formData.name} has been added to your pets.`,
-        variant: "default",
       });
-      
+
       resetForm();
       setAddDialogOpen(false);
     } catch (error) {
@@ -173,6 +216,10 @@ const PetProfiles = () => {
       notes: pet.notes || '',
       photoURL: pet.photoURL || ''
     });
+    
+    // Load health records for this pet
+    fetchPetHealthRecords(pet.id);
+    
     setEditDialogOpen(true);
   };
 
@@ -180,45 +227,41 @@ const PetProfiles = () => {
     if (!currentUser || !selectedPet) return;
     if (!formData.name) {
       toast({
-        title: "Missing Information",
-        description: "Please provide a name for your pet.",
+        title: "Name Required",
+        description: "Please enter a name for your pet.",
         variant: "destructive",
       });
       return;
     }
 
     try {
-      const petRef = ref(database, `users/${currentUser.uid}/pets/${selectedPet.id}`);
-      
-      const updatedPet = {
+      // Update the pet using safeUpdate
+      await safeUpdate(`users/${currentUser.uid}/pets/${selectedPet.id}`, {
         name: formData.name,
         type: formData.type,
-        breed: formData.breed || null,
+        breed: formData.breed || '',
         age: formData.age ? parseInt(formData.age) : null,
         weight: formData.weight ? parseFloat(formData.weight) : null,
-        feedingSchedule: formData.feedingSchedule || null,
-        foodType: formData.foodType || null,
+        feedingSchedule: formData.feedingSchedule || '',
+        foodType: formData.foodType || '',
         foodAmount: formData.foodAmount ? parseFloat(formData.foodAmount) : null,
-        notes: formData.notes || null,
-        photoURL: formData.photoURL || null
-      };
-      
-      await update(petRef, updatedPet);
-      
+        notes: formData.notes || '',
+        photoURL: formData.photoURL || '',
+        updatedAt: Date.now()
+      });
+
       toast({
         title: "Pet Updated",
-        description: `${formData.name}'s information has been updated.`,
-        variant: "default",
+        description: `${formData.name} has been updated successfully.`,
       });
-      
-      resetForm();
+
       setEditDialogOpen(false);
       setSelectedPet(null);
     } catch (error) {
       console.error('Error updating pet:', error);
       toast({
         title: "Error",
-        description: "Failed to update pet information. Please try again.",
+        description: "Failed to update pet. Please try again.",
         variant: "destructive",
       });
     }
@@ -233,61 +276,72 @@ const PetProfiles = () => {
     if (!currentUser || !selectedPet) return;
 
     try {
-      const petRef = ref(database, `users/${currentUser.uid}/pets/${selectedPet.id}`);
-      await remove(petRef);
-      
+      // Delete the pet using safeRemove
+      await safeRemove(`users/${currentUser.uid}/pets/${selectedPet.id}`);
+
       toast({
-        title: "Pet Removed",
+        title: "Pet Deleted",
         description: `${selectedPet.name} has been removed from your pets.`,
-        variant: "default",
       });
-      
+
       setDeleteDialogOpen(false);
       setSelectedPet(null);
     } catch (error) {
       console.error('Error deleting pet:', error);
       toast({
         title: "Error",
-        description: "Failed to remove pet. Please try again.",
+        description: "Failed to delete pet. Please try again.",
         variant: "destructive",
       });
     }
   };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0) return;
-    
-    const file = e.target.files[0];
-    if (!file.type.startsWith('image/')) {
-      toast({
-        title: "Invalid File",
-        description: "Please upload an image file.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
+    const file = e.target.files?.[0];
+    if (!file || !currentUser) return;
+
     setUploadingPhoto(true);
-    
+
     try {
-      // Simulate photo upload (in a real app, you'd upload to Firebase Storage)
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Create a FormData object to send the file
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', 'pet_photos'); // Your Cloudinary upload preset
       
-      // Mock URL for demo purposes
-      const photoURL = `https://source.unsplash.com/random/300x300/?${formData.type}`;
-      
-      setFormData(prev => ({ ...prev, photoURL }));
-      
-      toast({
-        title: "Photo Uploaded",
-        description: "Pet photo has been uploaded successfully.",
-        variant: "default",
+      // Upload to Cloudinary
+      const response = await fetch('https://api.cloudinary.com/v1_1/your-cloud-name/image/upload', {
+        method: 'POST',
+        body: formData
       });
+      
+      const data = await response.json();
+      
+      if (data.secure_url) {
+        // Update the form data with the new photo URL
+        setFormData(prev => ({
+          ...prev,
+          photoURL: data.secure_url
+        }));
+        
+        // If we're editing a pet, update the pet's photo URL in the database
+        if (selectedPet && editDialogOpen) {
+          await safeUpdate(`users/${currentUser.uid}/pets/${selectedPet.id}`, {
+            photoURL: data.secure_url
+          });
+          
+          toast({
+            title: "Photo Updated",
+            description: "Pet photo has been updated successfully.",
+          });
+        }
+      } else {
+        throw new Error('Failed to upload image');
+      }
     } catch (error) {
       console.error('Error uploading photo:', error);
       toast({
         title: "Upload Failed",
-        description: "Failed to upload photo. Please try again.",
+        description: "Failed to upload pet photo. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -310,6 +364,130 @@ const PetProfiles = () => {
       default:
         return <PawPrint className="h-5 w-5" />;
     }
+  };
+
+  // Add function to fetch health records for a specific pet
+  const fetchPetHealthRecords = async (petId: string) => {
+    if (!currentUser) return;
+    
+    setLoadingHealthRecords(true);
+    try {
+      const healthSnapshot = await safeOnValue(`users/${currentUser.uid}/pets/${petId}/healthRecords`, (snapshot) => {
+        if (snapshot && snapshot.exists()) {
+          const healthData = snapshot.val();
+          // Convert object to array and sort by date (newest first)
+          const records = Object.keys(healthData).map(key => ({
+            id: key,
+            ...healthData[key]
+          })).sort((a, b) => {
+            const dateA = new Date(a.date).getTime();
+            const dateB = new Date(b.date).getTime();
+            return dateB - dateA;
+          });
+          
+          setHealthRecords(records);
+        } else {
+          setHealthRecords([]);
+        }
+        setLoadingHealthRecords(false);
+      });
+      
+      return () => {
+        if (healthSnapshot) healthSnapshot();
+      };
+    } catch (error) {
+      console.error("Error fetching pet health records:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load health records. Please try again later.",
+        variant: "destructive"
+      });
+      setHealthRecords([]);
+      setLoadingHealthRecords(false);
+      return () => {};
+    }
+  };
+  
+  // Add function to add a new health record
+  const addHealthRecord = async () => {
+    if (!currentUser || !selectedPet) return;
+    
+    try {
+      // Validate input
+      if (!newHealthRecord.weight || isNaN(parseFloat(newHealthRecord.weight))) {
+        toast({
+          title: "Invalid Weight",
+          description: "Please enter a valid weight.",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // Create record with timestamp
+      const record = {
+        ...newHealthRecord,
+        timestamp: Date.now(),
+        weight: parseFloat(newHealthRecord.weight)
+      };
+      
+      // Generate a unique ID
+      const recordId = `record_${Date.now()}`;
+      
+      // Save to Firebase
+      await safeSet(`users/${currentUser.uid}/pets/${selectedPet.id}/healthRecords/${recordId}`, record);
+      
+      // Reset form and close dialog
+      setNewHealthRecord({
+        date: new Date().toISOString().split('T')[0],
+        weight: '',
+        notes: '',
+        activityLevel: 'normal',
+        foodIntake: 'normal'
+      });
+      setShowAddHealthRecord(false);
+      
+      toast({
+        title: "Health Record Added",
+        description: `Health record for ${selectedPet.name} has been saved successfully.`,
+        variant: "default"
+      });
+    } catch (error) {
+      console.error("Error adding health record:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save health record. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+  
+  // Add function to delete a health record
+  const deleteHealthRecord = async (recordId: string) => {
+    if (!currentUser || !selectedPet) return;
+    
+    try {
+      // Remove from Firebase
+      await safeRemove(`users/${currentUser.uid}/pets/${selectedPet.id}/healthRecords/${recordId}`);
+      
+      toast({
+        title: "Record Deleted",
+        description: "The health record has been deleted successfully.",
+        variant: "default"
+      });
+    } catch (error) {
+      console.error("Error deleting health record:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete health record. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+  
+  // Add function to format date
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
   };
 
   if (loading) {
@@ -612,12 +790,13 @@ const PetProfiles = () => {
           </DialogHeader>
           
           <Tabs defaultValue="basic" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="basic">Basic Info</TabsTrigger>
-              <TabsTrigger value="feeding">Feeding Details</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="details">Details</TabsTrigger>
+              <TabsTrigger value="feeding">Feeding</TabsTrigger>
+              <TabsTrigger value="health">Health</TabsTrigger>
             </TabsList>
             
-            <TabsContent value="basic" className="space-y-4 py-4">
+            <TabsContent value="details" className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="edit-name">Pet Name *</Label>
                 <Input
@@ -769,10 +948,77 @@ const PetProfiles = () => {
                 />
               </div>
             </TabsContent>
+            
+            <TabsContent value="health">
+              <div className="space-y-4 py-2">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-medium">Health Records</h3>
+                  <Button 
+                    onClick={() => setShowAddHealthRecord(true)}
+                    size="sm"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Record
+                  </Button>
+                </div>
+                
+                {loadingHealthRecords ? (
+                  <div className="flex justify-center items-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  </div>
+                ) : healthRecords && healthRecords.length > 0 ? (
+                  <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
+                    {healthRecords.map((record) => (
+                      <div 
+                        key={record.id} 
+                        className="p-4 border rounded-md bg-gray-50 dark:bg-gray-800"
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex items-center space-x-2">
+                            <Calendar className="h-4 w-4 text-gray-500" />
+                            <span className="font-medium">{formatDate(record.date)}</span>
+                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => deleteHealthRecord(record.id)}
+                            className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                          >
+                            <XCircle className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4 mb-2">
+                          <div className="flex items-center space-x-2">
+                            <Weight className="h-4 w-4 text-gray-500" />
+                            <span className="text-sm">{record.weight} kg</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Activity className="h-4 w-4 text-gray-500" />
+                            <span className="text-sm capitalize">{record.activityLevel} activity</span>
+                          </div>
+                        </div>
+                        
+                        {record.notes && (
+                          <div className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                            {record.notes}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <Heart className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <p>No health records yet. Add your first record to start tracking {selectedPet?.name}'s health.</p>
+                  </div>
+                )}
+              </div>
+            </TabsContent>
           </Tabs>
           
           <DialogFooter>
-            <Button variant="outline" onClick={() => { resetForm(); setEditDialogOpen(false); setSelectedPet(null); }}>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
               Cancel
             </Button>
             <Button onClick={handleUpdatePet}>
@@ -798,6 +1044,101 @@ const PetProfiles = () => {
             </Button>
             <Button variant="destructive" onClick={handleDeletePet}>
               Remove Pet
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Health Record Dialog */}
+      <Dialog open={showAddHealthRecord} onOpenChange={setShowAddHealthRecord}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Add Health Record</DialogTitle>
+            <DialogDescription>
+              {selectedPet ? `Record ${selectedPet.name}'s health metrics to track their well-being over time.` : 'Record your pet\'s health metrics.'}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="record-date">Date</Label>
+              <Input 
+                id="record-date" 
+                type="date" 
+                value={newHealthRecord.date}
+                onChange={(e) => setNewHealthRecord({...newHealthRecord, date: e.target.value})}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="record-weight">Weight (kg)</Label>
+              <Input 
+                id="record-weight" 
+                type="number" 
+                step="0.1"
+                placeholder="Enter weight in kg"
+                value={newHealthRecord.weight}
+                onChange={(e) => setNewHealthRecord({...newHealthRecord, weight: e.target.value})}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="record-activity">Activity Level</Label>
+              <Select 
+                value={newHealthRecord.activityLevel}
+                onValueChange={(value) => setNewHealthRecord({...newHealthRecord, activityLevel: value})}
+              >
+                <SelectTrigger id="record-activity">
+                  <SelectValue placeholder="Select activity level" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="normal">Normal</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="record-food">Food Intake</Label>
+              <Select 
+                value={newHealthRecord.foodIntake}
+                onValueChange={(value) => setNewHealthRecord({...newHealthRecord, foodIntake: value})}
+              >
+                <SelectTrigger id="record-food">
+                  <SelectValue placeholder="Select food intake" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="normal">Normal</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="record-notes">Notes</Label>
+              <Textarea 
+                id="record-notes" 
+                placeholder="Any observations or concerns"
+                value={newHealthRecord.notes}
+                onChange={(e) => setNewHealthRecord({...newHealthRecord, notes: e.target.value})}
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowAddHealthRecord(false)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={addHealthRecord}
+              disabled={!newHealthRecord.weight || isNaN(parseFloat(newHealthRecord.weight))}
+            >
+              Save Record
             </Button>
           </DialogFooter>
         </DialogContent>

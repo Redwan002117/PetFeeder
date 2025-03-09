@@ -1,9 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { ref, onValue, off, set, getDatabase } from 'firebase/database';
+import { off } from 'firebase/database';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { database, initializeFirebase } from '@/lib/firebase';
+import { safeRef, safeSet, safeUpdate, safeOnValue } from '@/lib/firebase-utils';
 
-const db = getDatabase();
+// Ensure Firebase is initialized
+initializeFirebase();
 
 interface DeviceData {
   name: string;
@@ -25,6 +28,7 @@ interface DeviceContextType {
   updateWiFiConfig: (config: DeviceData['wifiConfig']) => Promise<void>;
   updateDeviceName: (name: string) => Promise<void>;
   triggerFeed: (amount: number) => Promise<void>;
+  databaseAvailable: boolean;
 }
 
 const DeviceContext = createContext<DeviceContextType | undefined>(undefined);
@@ -39,112 +43,234 @@ export function useDevice() {
 
 export function DeviceProvider({ children }: { children: React.ReactNode }) {
   const [device, setDevice] = useState<DeviceData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const { currentUser, userData } = useAuth();
+  const [loading, setLoading] = useState<boolean>(true);
+  const [databaseAvailable, setDatabaseAvailable] = useState<boolean>(true);
+  const { currentUser } = useAuth();
   const { toast } = useToast();
 
   useEffect(() => {
-    const deviceId = userData?.deviceId || '';
-    
-    if (!deviceId) {
+    if (!currentUser) {
+      setDevice(null);
       setLoading(false);
       return;
     }
 
-    const deviceRef = ref(db, `devices/${deviceId}`);
-    onValue(deviceRef, (snapshot) => {
-      if (snapshot.exists()) {
-        setDevice(snapshot.val());
-      } else {
+    setLoading(true);
+
+    // Make sure Firebase is initialized
+    initializeFirebase();
+
+    // If database is not available, show an error
+    if (!database) {
+      console.error('Firebase database is not available');
+      setDatabaseAvailable(false);
+      toast({
+        title: 'Connection Error',
+        description: 'Could not connect to the device database. Please try again later.',
+        variant: 'destructive',
+      });
+      setLoading(false);
+      return;
+    }
+
+    // Database is available
+    setDatabaseAvailable(true);
+
+    // Use our safe onValue function instead of direct onValue
+    const unsubscribe = safeOnValue(
+      `devices/${currentUser.uid}`,
+      (snapshot: any) => {
+        setLoading(false);
+        if (snapshot.exists()) {
+          setDevice(snapshot.val());
+        } else {
+          // Create a default device if none exists
+          const defaultDevice: DeviceData = {
+            name: 'My PetFeeder',
+            status: 'offline',
+            foodLevel: 0,
+            lastSeen: Date.now(),
+            wifiConfig: {
+              ssid: '',
+              password: '',
+              hotspotEnabled: false,
+              hotspotName: 'PetFeeder_' + currentUser.uid.substring(0, 5),
+              hotspotPassword: 'petfeeder'
+            }
+          };
+          
+          safeSet(`devices/${currentUser.uid}`, defaultDevice)
+            .then((success) => {
+              if (success) {
+                setDevice(defaultDevice);
+              } else {
+                console.error('Failed to create default device');
+                toast({
+                  title: 'Error',
+                  description: 'Failed to create your device profile. Please try again later.',
+                  variant: 'destructive',
+                });
+              }
+            })
+            .catch(error => {
+              console.error('Error creating default device:', error);
+              toast({
+                title: 'Error',
+                description: 'Failed to create your device profile. Please try again later.',
+                variant: 'destructive',
+              });
+            });
+        }
+      },
+      (error: any) => {
+        console.error('Error fetching device data:', error);
+        setLoading(false);
+        setDatabaseAvailable(false);
         toast({
-          title: "Error",
-          description: "Device not found",
-          variant: "destructive",
+          title: 'Connection Error',
+          description: 'Could not fetch device data. Please check your connection and try again.',
+          variant: 'destructive',
         });
       }
-      setLoading(false);
-    }, (error) => {
-      console.error('Error loading device:', error);
-      toast({
-        title: "Error",
-        description: "Error loading device data",
-        variant: "destructive",
-      });
-      setLoading(false);
-    });
+    );
 
     return () => {
-      off(deviceRef);
+      // Clean up the listener
+      if (unsubscribe) {
+        unsubscribe();
+      }
     };
-  }, [currentUser, userData]);
+  }, [currentUser, toast]);
 
   const updateWiFiConfig = async (config: DeviceData['wifiConfig']) => {
-    const deviceId = userData?.deviceId || '';
-    if (!deviceId || !device) return;
+    if (!currentUser || !device) {
+      toast({
+        title: 'Error',
+        description: 'You must be logged in and have a device to update WiFi settings.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!databaseAvailable) {
+      toast({
+        title: 'Connection Error',
+        description: 'Database is not available. Please try again later.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     try {
-      const configRef = ref(db, `devices/${deviceId}/wifiConfig`);
-      await set(configRef, config);
-      toast({
-        title: "Success",
-        description: "WiFi configuration updated successfully",
-      });
+      const success = await safeUpdate(`devices/${currentUser.uid}/wifiConfig`, config);
+      
+      if (success) {
+        toast({
+          title: 'Success',
+          description: 'WiFi configuration updated successfully.',
+          variant: 'default',
+        });
+      } else {
+        throw new Error('Failed to update WiFi configuration');
+      }
     } catch (error) {
       console.error('Error updating WiFi config:', error);
       toast({
-        title: "Error",
-        description: "Failed to update WiFi configuration",
-        variant: "destructive",
+        title: 'Error',
+        description: 'Failed to update WiFi configuration. Please try again.',
+        variant: 'destructive',
       });
-      throw error;
     }
   };
 
   const updateDeviceName = async (name: string) => {
-    const deviceId = userData?.deviceId || '';
-    if (!deviceId || !device) return;
+    if (!currentUser || !device) {
+      toast({
+        title: 'Error',
+        description: 'You must be logged in and have a device to update its name.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!databaseAvailable) {
+      toast({
+        title: 'Connection Error',
+        description: 'Database is not available. Please try again later.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     try {
-      const nameRef = ref(db, `devices/${deviceId}/name`);
-      await set(nameRef, name);
-      toast({
-        title: "Success",
-        description: "Device name updated successfully",
-      });
+      const success = await safeUpdate(`devices/${currentUser.uid}`, { name });
+      
+      if (success) {
+        toast({
+          title: 'Success',
+          description: 'Device name updated successfully.',
+          variant: 'default',
+        });
+      } else {
+        throw new Error('Failed to update device name');
+      }
     } catch (error) {
       console.error('Error updating device name:', error);
       toast({
-        title: "Error",
-        description: "Failed to update device name",
-        variant: "destructive",
+        title: 'Error',
+        description: 'Failed to update device name. Please try again.',
+        variant: 'destructive',
       });
-      throw error;
     }
   };
 
   const triggerFeed = async (amount: number) => {
-    const deviceId = userData?.deviceId || '';
-    if (!deviceId || !device) return;
+    if (!currentUser || !device) {
+      toast({
+        title: 'Error',
+        description: 'You must be logged in and have a device to trigger feeding.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!databaseAvailable) {
+      toast({
+        title: 'Connection Error',
+        description: 'Database is not available. Please try again later.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     try {
-      const feedRef = ref(db, `devices/${deviceId}/feedCommand`);
-      await set(feedRef, {
-        pending: true,
+      const feedingRef = safeRef(`feeding_requests/${currentUser.uid}`);
+      if (!feedingRef) {
+        throw new Error('Failed to create feeding request reference');
+      }
+      
+      const success = await safeSet(feedingRef, {
         amount,
         timestamp: Date.now(),
+        status: 'pending'
       });
-      toast({
-        title: "Success",
-        description: "Feed command sent successfully",
-      });
+      
+      if (success) {
+        toast({
+          title: 'Success',
+          description: `Feeding request sent (${amount} units).`,
+          variant: 'default',
+        });
+      } else {
+        throw new Error('Failed to send feeding request');
+      }
     } catch (error) {
-      console.error('Error sending feed command:', error);
+      console.error('Error triggering feed:', error);
       toast({
-        title: "Error",
-        description: "Failed to send feed command",
-        variant: "destructive",
+        title: 'Error',
+        description: 'Failed to send feeding request. Please try again.',
+        variant: 'destructive',
       });
-      throw error;
     }
   };
 
@@ -154,6 +280,7 @@ export function DeviceProvider({ children }: { children: React.ReactNode }) {
     updateWiFiConfig,
     updateDeviceName,
     triggerFeed,
+    databaseAvailable
   };
 
   return (

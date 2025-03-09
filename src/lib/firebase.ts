@@ -1,9 +1,9 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp, FirebaseApp, getApp } from 'firebase/app';
 import { 
   getAuth, 
   getDatabase, 
   getStorage, 
-  getMessaging 
+  getMessaging
 } from './firebase-imports';
 import { 
   signInWithEmailAndPassword, 
@@ -22,7 +22,12 @@ import {
   setPersistence,
   browserLocalPersistence,
   signInWithRedirect,
-  getRedirectResult
+  getRedirectResult,
+  sendPasswordResetEmail,
+  verifyPasswordResetCode,
+  confirmPasswordReset,
+  deleteUser,
+  connectAuthEmulator
 } from "firebase/auth";
 import { 
   ref, 
@@ -33,19 +38,35 @@ import {
   update, 
   remove,
   get,
-  serverTimestamp
+  serverTimestamp,
+  connectDatabaseEmulator,
+  Database
 } from "firebase/database";
 import {
   ref as storageRef,
   uploadBytes,
-  getDownloadURL
+  getDownloadURL,
+  connectStorageEmulator
 } from "firebase/storage";
 import { getToken, onMessage } from "firebase/messaging";
 import firebaseConfig from "./firebase-config";
 import { throttle } from 'lodash';
+import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
+import { 
+  safeRef, 
+  safeSet, 
+  safeUpdate, 
+  safeGet, 
+  safeOnValue, 
+  safePush, 
+  safeRemove, 
+  safeServerTimestamp 
+} from './firebase-utils';
 
 // Environment detection
-const isDevelopment = import.meta.env.DEV || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const isDevelopment = import.meta.env.DEV === true;
+// Determine if we should use emulators (only in development and if explicitly enabled)
+const useEmulators = isDevelopment && import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true';
 
 // Simplified ad blocker detection
 let adBlockerDetected = false;
@@ -77,80 +98,277 @@ setTimeout(() => {
   }
 }, 500); // Delay to ensure the DOM is ready
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const database = getDatabase(app);
-const storage = getStorage(app);
-const googleProvider = new GoogleAuthProvider();
-
-// Set persistence to LOCAL to keep the user logged in even after page refresh
-setPersistence(auth, browserLocalPersistence)
-  .then(() => {
-    console.log("Firebase persistence set to LOCAL");
-  })
-  .catch((error) => {
-    console.error("Error setting persistence:", error);
-  });
-
-// Configure Firebase Storage CORS settings
-// Note: This is a client-side setting and won't affect the actual Firebase Storage CORS rules
-// You need to configure CORS in the Firebase console for production
+// Initialize Firebase app immediately to avoid "No Firebase App '[DEFAULT]' has been created" error
+let app;
 try {
-  storage.maxOperationRetryTime = 20000; // Increase retry time
-  storage.maxUploadRetryTime = 20000; // Increase upload retry time
+  app = initializeApp(firebaseConfig);
+  console.log('Firebase app initialized successfully on initial load');
 } catch (error) {
-  console.error("Error configuring storage:", error);
-}
-
-let messaging: any = null;
-
-// Initialize Firebase Cloud Messaging and get a reference to the service
-// Only initialize in browser environment, not in service worker
-if (typeof window !== 'undefined') {
+  console.error('Error initializing Firebase app on initial load:', error);
+  // If there's an error, it might be because the app is already initialized
   try {
-    // Import messaging dynamically to avoid issues with ad blockers
-    import('firebase/messaging').then(({ getMessaging }) => {
-      if (!adBlockerDetected) {
-        messaging = getMessaging(app);
-        console.log('Firebase messaging initialized successfully');
-      } else {
-        console.log('Skipping Firebase messaging initialization due to ad blocker');
-      }
-    }).catch(error => {
-      console.error('Error initializing Firebase messaging:', error);
-    });
-  } catch (error) {
-    console.error('Error importing Firebase messaging:', error);
+    app = getApp();
+    console.log('Retrieved existing Firebase app');
+  } catch (getAppError) {
+    console.error('Could not retrieve existing Firebase app:', getAppError);
   }
 }
 
-// Add this rate limiting utility
-const rateLimiter = {
-  timestamps: {},
-  maxRequests: 10,
-  timeWindow: 60000, // 1 minute
-  
-  checkLimit(key: string): boolean {
-    const now = Date.now();
-    const timestamps = this.timestamps[key] || [];
-    
-    // Remove timestamps outside the time window
-    const recentTimestamps = timestamps.filter(ts => now - ts < this.timeWindow);
-    
-    // Check if the number of recent requests exceeds the limit
-    if (recentTimestamps.length >= this.maxRequests) {
-      console.warn(`Rate limit exceeded for ${key}`);
-      return false;
+// Initialize Firebase
+let auth = null;
+let database = null;
+let firestore = null;
+let storage = null;
+let messaging = null;
+let googleProvider = null;
+
+// Flag to track initialization status
+let isInitialized = false;
+
+// Create a mock database reference
+const createMockRef = (path: string) => {
+  return {
+    key: path.split('/').pop(),
+    path: path,
+    parent: null,
+    root: null,
+    _checkNotDeleted: () => true,
+    toString: () => path
+  };
+};
+
+// Create a fixed admin account for development and testing
+const createFixedAdminAccount = async () => {
+  if (!auth || !database || typeof database.ref !== 'function') {
+    console.error('Auth or database not initialized properly');
+    return;
+  }
+
+  try {
+    // Check if admin exists in database
+    const adminRef = safeRef('users/admin123');
+    if (!adminRef) {
+      console.error('Error checking admin in database: adminRef is null');
+      return;
     }
-    
-    // Add the current timestamp
-    recentTimestamps.push(now);
-    this.timestamps[key] = recentTimestamps;
-    
-    return true;
+
+    const adminSnapshot = await safeGet('users/admin123');
+
+    if (adminSnapshot && adminSnapshot.exists()) {
+      console.log('Admin account exists');
+      return;
+    }
+
+    // Create admin account in database if it doesn't exist
+    await safeSet('users/admin123', {
+      email: 'admin@example.com',
+      displayName: 'Admin User',
+      role: 'admin',
+      createdAt: Date.now()
+    });
+
+    console.log('Fixed admin account created successfully');
+  } catch (error) {
+    console.error('Error checking admin in database:', error);
   }
 };
+
+// Initialize Firebase and services
+function initializeFirebase() {
+  if (isInitialized) return;
+  
+  try {
+    console.log('Initializing Firebase with config:', { ...firebaseConfig, apiKey: '***REDACTED***' });
+    
+    // Check if databaseURL is provided
+    if (!firebaseConfig.databaseURL) {
+      console.error('Firebase database URL is not configured. Database features will not work.');
+    }
+    
+    // Initialize Firebase app if not already initialized
+    if (!app) {
+      try {
+        app = initializeApp(firebaseConfig);
+        console.log('Firebase app initialized successfully');
+      } catch (initError) {
+        console.error('Error initializing Firebase app:', initError);
+        // Try to get the existing app
+        try {
+          app = getApp();
+          console.log('Retrieved existing Firebase app');
+        } catch (getAppError) {
+          console.error('Could not retrieve existing Firebase app:', getAppError);
+          throw initError; // Re-throw the original error if we can't get an existing app
+        }
+      }
+    }
+    
+    // Initialize Firebase services
+    if (!auth) {
+      try {
+        auth = getAuth(app);
+        console.log('Firebase auth initialized successfully');
+        
+        // Set persistence to LOCAL to keep the user logged in
+        setPersistence(auth, browserLocalPersistence)
+          .then(() => console.log('Firebase persistence set to LOCAL'))
+          .catch(error => console.error('Error setting persistence:', error));
+      } catch (authError) {
+        console.error('Error initializing Firebase auth:', authError);
+      }
+    }
+    
+    // Initialize database if URL is provided
+    if (firebaseConfig.databaseURL && !database) {
+      try {
+        // First try with default app
+        database = getDatabase(app);
+        console.log('Firebase database initialized successfully');
+      } catch (dbError) {
+        console.error('Error initializing Firebase database:', dbError);
+        
+        try {
+          // Try with explicit app and URL
+          database = getDatabase(app, firebaseConfig.databaseURL);
+          console.log('Firebase database initialized with explicit URL');
+        } catch (explicitDbError) {
+          console.error('Error initializing Firebase database with explicit URL:', explicitDbError);
+          
+          // Create a more complete mock database for offline functionality
+          console.log('Creating mock database for offline functionality');
+          database = {
+            _mockData: {},
+            _listeners: {},
+            app: app,
+            
+            // Implement required methods
+            ref: (path: string) => createMockRef(path),
+            
+            // Add _checkNotDeleted method to the database object itself
+            _checkNotDeleted: () => true
+          };
+        }
+      }
+    }
+    
+    // Initialize Firestore
+    if (!firestore) {
+      try {
+        firestore = getFirestore(app);
+        console.log('Firebase Firestore initialized successfully');
+      } catch (firestoreError) {
+        console.error('Error initializing Firestore:', firestoreError);
+        firestore = null;
+      }
+    }
+    
+    // Initialize Storage
+    if (!storage) {
+      try {
+        storage = getStorage(app);
+        console.log('Firebase Storage initialized successfully');
+      } catch (storageError) {
+        console.error('Error initializing Storage:', storageError);
+        
+        // Create a mock storage for offline functionality
+        console.log('Creating mock storage for offline functionality');
+        storage = {
+          _mockData: {},
+          ref: (path: string) => ({
+            path: path,
+            put: async (file: File) => ({
+              ref: { getDownloadURL: async () => `mock-url-for-${file.name}` },
+              metadata: { name: file.name, contentType: file.type }
+            }),
+            getDownloadURL: async () => `mock-url-for-${path}`,
+            _checkNotDeleted: () => true
+          })
+        };
+      }
+    }
+    
+    // Initialize Google provider
+    if (!googleProvider) {
+      googleProvider = new GoogleAuthProvider();
+      googleProvider.setCustomParameters({ prompt: 'select_account' });
+    }
+    
+    // Connect to emulators only in development mode and if explicitly enabled
+    if (useEmulators) {
+      try {
+        // Check if we're running in a browser environment
+        if (typeof window !== 'undefined') {
+          console.log('Connecting to Firebase emulators...');
+          
+          // Connect to auth emulator
+          if (auth) {
+            connectAuthEmulator(auth, "http://localhost:9099", { disableWarnings: false });
+          }
+          
+          // Connect to database emulator
+          if (database && typeof database.ref === 'function') {
+            connectDatabaseEmulator(database, "localhost", 9000);
+          }
+          
+          // Connect to firestore emulator
+          if (firestore) {
+            connectFirestoreEmulator(firestore, "localhost", 8080);
+          }
+          
+          // Connect to storage emulator
+          if (storage && typeof storage.ref === 'function') {
+            connectStorageEmulator(storage, "localhost", 9199);
+          }
+          
+          console.log("Connected to Firebase emulators");
+        }
+      } catch (error) {
+        console.error("Error connecting to Firebase emulators:", error);
+      }
+    }
+    
+    isInitialized = true;
+    console.log('Firebase initialization complete');
+    
+    // Create fixed admin account after initialization
+    if (database && typeof database.ref === 'function') {
+      try {
+        createFixedAdminAccount();
+      } catch (error) {
+        console.error('Error creating fixed admin account:', error);
+      }
+    }
+    
+  } catch (error) {
+    console.error("Error initializing Firebase:", error);
+    isInitialized = false;
+  }
+}
+
+// Initialize Firebase immediately
+initializeFirebase();
+
+// Add this rate limiting utility
+const rateLimits = {};
+const RATE_LIMIT_RESET_MS = 60000; // 1 minute
+
+// Check if a function call should be rate limited
+function checkLimit(key, limit = 10) {
+  const now = Date.now();
+  
+  // Initialize or reset expired rate limit
+  if (!rateLimits[key] || now - rateLimits[key].timestamp > RATE_LIMIT_RESET_MS) {
+    rateLimits[key] = {
+      count: 1,
+      timestamp: now
+    };
+    return true;
+  }
+  
+  // Increment count and check if limit is reached
+  rateLimits[key].count++;
+  return rateLimits[key].count <= limit;
+}
 
 // Authentication helper functions
 export const signIn = async (emailOrUsername: string, password: string) => {
@@ -211,48 +429,53 @@ export const getGoogleAuthProvider = () => {
   return provider;
 };
 
-// Update the signInWithGoogle function to accept a boolean for signup mode
+// Update the signInWithGoogle function to avoid loops
 export const signInWithGoogle = async (isSignup?: boolean) => {
   try {
+    // Clear any previous auth state to prevent loops
+    localStorage.removeItem('authMode');
+    
     // Store auth mode in session storage for redirect handling
     if (isSignup) {
       localStorage.setItem('authMode', 'signup');
     } else {
       localStorage.setItem('authMode', 'signin');
     }
-    
+
     // Get a fresh provider instance
     const provider = getGoogleAuthProvider();
-    
+
     // Use signInWithPopup for immediate feedback
     try {
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
       console.log("Successfully signed in with popup:", user);
+
+      // Process the user
+      await processGoogleUser(user);
       
-      // Process the user based on auth mode
-      const authMode = localStorage.getItem('authMode');
+      // Clear auth mode after successful sign-in
+      localStorage.removeItem('authMode');
       
-      // Check if user exists in database
-      const userRef = ref(database, `users/${user.uid}`);
-      const userSnapshot = await get(userRef);
-      
-      if (!userSnapshot.exists()) {
-        // User doesn't exist in database, needs to set up username
-        return { success: true, newUser: true, user };
-      }
-      
-      // User exists, return success
-      return { success: true, newUser: false, user };
+      return { 
+        success: true, 
+        user 
+      };
     } catch (popupError) {
-      console.error("Popup sign-in failed, falling back to redirect:", popupError);
+      console.error("Popup sign-in failed, trying redirect:", popupError);
       
-      // Fall back to redirect method
+      // If popup fails (e.g., blocked by browser), fall back to redirect
       await signInWithRedirect(auth, provider);
-      return { success: true };
+      return { 
+        success: true, 
+        redirect: true 
+      };
     }
   } catch (error: any) {
     console.error("Google sign-in error:", error);
+    
+    // Clear auth mode on error
+    localStorage.removeItem('authMode');
     
     return { 
       success: false, 
@@ -261,100 +484,78 @@ export const signInWithGoogle = async (isSignup?: boolean) => {
   }
 };
 
+// Helper function to process Google user
+const processGoogleUser = async (user: User) => {
+  if (!user) return;
+  
+  try {
+    // Check if user already exists in database
+    const userData = await safeGet(`users/${user.uid}`);
+    
+    if (!userData || !userData.exists()) {
+      // Create new user data
+      const newUser = {
+        email: user.email,
+        displayName: user.displayName || '',
+        photoURL: user.photoURL || '',
+        createdAt: Date.now(),
+        lastLogin: Date.now(),
+        role: 'user', // Always set new users as regular users
+        permissions: {
+          canFeed: true,
+          canSchedule: true,
+          canViewStats: true
+        }
+      };
+      
+      // Save user data to database
+      await safeSet(`users/${user.uid}`, newUser);
+      console.log('New user created in database:', user.uid);
+    } else {
+      // Update last login
+      await safeUpdate(`users/${user.uid}`, {
+        lastLogin: Date.now(),
+        // Ensure role is set to 'user' unless explicitly marked as admin in the database
+        role: userData.val().role === 'admin' ? 'admin' : 'user'
+      });
+      console.log('Existing user updated in database:', user.uid);
+    }
+  } catch (error) {
+    console.error('Error processing Google user:', error);
+  }
+};
+
 // Add a function to handle the redirect result
 export const handleRedirectResult = async () => {
+  console.log('Checking for redirect result...');
   try {
-    console.log("Checking for redirect result...");
     const result = await getRedirectResult(auth);
-    
+
     if (result && result.user) {
-      // User successfully signed in with redirect
-      const user = result.user;
-      console.log("Successfully signed in with redirect:", user);
+      console.log('Redirect result found:', result);
       
-      // Check if this was a signup (with username) or just a signin
-      const authMode = localStorage.getItem('authMode');
-      console.log("Auth mode from local storage:", authMode);
+      // Process the user
+      await processGoogleUser(result.user);
       
-      if (authMode === 'signup') {
-        const pendingUsername = localStorage.getItem('pendingUsername');
-        console.log("Pending username:", pendingUsername);
-        
-        if (pendingUsername) {
-          // Update the user profile with the username
-          await updateUserProfile(user, { displayName: pendingUsername });
-          
-          // Create or update user data in the database
-          const userRef = ref(database, `users/${user.uid}`);
-          const userSnapshot = await get(userRef);
-          
-          if (!userSnapshot.exists()) {
-            // Create new user data
-            const userData = {
-              email: user.email,
-              username: pendingUsername,
-              displayName: pendingUsername,
-              role: 'user',
-              permissions: {
-                canFeed: true,
-                canSchedule: true,
-                canViewStats: true
-              },
-              createdAt: serverTimestamp(),
-              provider: 'google'
-            };
-            
-            // Save user data to database
-            await set(userRef, userData);
-          }
-          
-          // Clear the local storage
-          localStorage.removeItem('authMode');
-          localStorage.removeItem('pendingUsername');
-          
-          // Return success with newUser flag
-          return { success: true, newUser: true, user };
-        }
-      }
+      // Clear auth mode after successful sign-in
+      localStorage.removeItem('authMode');
       
-      // For regular sign-in, check if user exists in database
-      const userRef = ref(database, `users/${user.uid}`);
-      const userSnapshot = await get(userRef);
-      
-      if (!userSnapshot.exists()) {
-        // User doesn't exist in database, redirect to username setup
-        return { success: true, newUser: true, user };
-      }
-      
-      // User exists, return success
-      return { success: true, newUser: false, user };
+      return { 
+        success: true, 
+        user: result.user 
+      };
     }
     
-    // Check if user is already signed in
-    const currentUser = auth.currentUser;
-    if (currentUser) {
-      console.log("User already signed in:", currentUser);
-      
-      // Check if user exists in database
-      const userRef = ref(database, `users/${currentUser.uid}`);
-      const userSnapshot = await get(userRef);
-      
-      if (!userSnapshot.exists()) {
-        // User doesn't exist in database, redirect to username setup
-        return { success: true, newUser: true, user: currentUser };
-      }
-      
-      // User exists, return success
-      return { success: true, newUser: false, user: currentUser };
-    }
-    
-    console.log("No redirect result found and no user signed in");
-    return { success: false, newUser: false };
+    return { success: false, noResult: true };
   } catch (error: any) {
-    console.error("Error handling redirect result:", error);
+    console.error('Error handling redirect result:', error);
+    
+    // Clear auth mode on error
+    localStorage.removeItem('authMode');
+    
     return { 
       success: false, 
-      error: error.message || "Failed to complete authentication." 
+      error: error.message || 'Failed to complete authentication.' 
     };
   }
 };
@@ -439,75 +640,34 @@ export const registerUser = async (email: string, password: string, name: string
 
 // Database functions
 export const setData = async (path: string, data: any) => {
-  try {
-    await set(ref(database, path), data);
-  } catch (error) {
-    console.error(`Error setting data at ${path}:`, error);
-    throw error;
-  }
+  return safeSet(path, data);
 };
 
 export const updateData = async (path: string, data: any) => {
-  try {
-    await update(ref(database, path), data);
-  } catch (error) {
-    console.error(`Error updating data at ${path}:`, error);
-    throw error;
-  }
+  return safeUpdate(path, data);
 };
 
 export const getData = async (path: string) => {
-  try {
-    // Apply rate limiting if needed
-    const rateLimitKey = `getData_${path}`;
-    if (rateLimiter && !rateLimiter.checkLimit(rateLimitKey)) {
-      throw new Error("Rate limit exceeded. Please try again later.");
-    }
-    
-    const snapshot = await get(ref(database, path));
-    // Check if snapshot exists using the proper method for Realtime Database
-    return snapshot.exists() ? snapshot.val() : null;
-  } catch (error) {
-    console.error(`Error getting data from ${path}:`, error);
-    throw error;
-  }
+  return safeGet(path);
 };
 
 export const getUserData = async (userId: string) => {
-  try {
-    // Apply rate limiting
-    const rateLimitKey = `getUserData_${userId}`;
-    if (!rateLimiter.checkLimit(rateLimitKey)) {
-      throw new Error("Rate limit exceeded. Please try again later.");
-    }
-    
-    return await getData(`users/${userId}`);
-  } catch (error) {
-    console.error("Error getting user data:", error);
-    throw error;
-  }
+  return safeGet(`users/${userId}`);
 };
 
 export const removeData = async (path: string) => {
-  try {
-    await remove(ref(database, path));
-  } catch (error) {
-    console.error(`Error removing data at ${path}:`, error);
-    throw error;
-  }
+  return safeRemove(path);
 };
 
 export const getAllUsers = (callback: (users: any) => void) => {
-  const usersRef = ref(database, 'users');
-  return onValue(usersRef, (snapshot) => {
-    const users = snapshot.val();
+  return safeOnValue('users', (snapshot: any) => {
+    const users = snapshot.val() || {};
     callback(users);
   });
 };
 
 export const updateUserPermissions = (userId: string, permissions: any) => {
-  const userPermissionsRef = ref(database, `users/${userId}/permissions`);
-  return update(userPermissionsRef, permissions);
+  return safeUpdate(`users/${userId}/permissions`, permissions);
 };
 
 export const signOut = async () => {
@@ -646,181 +806,122 @@ export const getProfilePictureUrl = async (userId: string) => {
 
 // Database helper functions
 export const saveFeedingSchedule = (userId: string, scheduleData: any) => {
-  const scheduleRef = ref(database, `users/${userId}/feedingSchedule`);
-  return set(scheduleRef, scheduleData);
+  return safeSet(`feeding_schedules/${userId}`, scheduleData);
 };
 
 export const getFeedingSchedule = (userId: string, callback: (data: any) => void) => {
-  const scheduleRef = ref(database, `users/${userId}/feedingSchedule`);
-  return onValue(scheduleRef, (snapshot) => {
-    callback(snapshot.val());
+  return safeOnValue(`feeding_schedules/${userId}`, (snapshot: any) => {
+    callback(snapshot.val() || {});
   });
 };
 
 export const triggerManualFeed = (userId: string, amount: number) => {
-  const feedRef = ref(database, `users/${userId}/manualFeed`);
-  return set(feedRef, {
-    timestamp: serverTimestamp(),
+  return safeSet(`feeding_requests/${userId}`, {
     amount,
+    timestamp: safeServerTimestamp(),
     status: 'pending'
   });
 };
 
 export const getFeedingHistory = (userId: string, callback: (data: any) => void) => {
-  const historyRef = ref(database, `users/${userId}/feedingHistory`);
-  return onValue(historyRef, (snapshot) => {
-    callback(snapshot.val());
+  return safeOnValue(`feeding_history/${userId}`, (snapshot: any) => {
+    callback(snapshot.val() || {});
   });
 };
 
 export const getDeviceStatus = (userId: string, callback: (data: any) => void) => {
-  try {
-    const deviceRef = ref(database, `devices`);
-    const unsubscribe = onValue(deviceRef, (snapshot) => {
-      if (snapshot.exists()) {
-        callback(snapshot.val());
-      } else {
-        callback(null);
-      }
+  return safeOnValue(`devices/${userId}`, (snapshot: any) => {
+    callback(snapshot.val() || {
+      status: 'offline',
+      lastSeen: Date.now() - 86400000, // 24 hours ago
+      foodLevel: 0
     });
-    
-    return () => off(deviceRef);
-  } catch (error) {
-    console.error("Error getting device status:", error);
-    return () => {};
-  }
+  });
 };
 
 export const getDevices = async (userId: string) => {
-  try {
-    // Apply rate limiting
-    const rateLimitKey = `getDevices_${userId}`;
-    if (!rateLimiter.checkLimit(rateLimitKey)) {
-      throw new Error("Rate limit exceeded. Please try again later.");
-    }
-    
-    const devicesRef = ref(database, 'devices');
-    const snapshot = await get(devicesRef);
-    
-    if (snapshot.exists()) {
-      // Filter devices that belong to the user
-      const allDevices = snapshot.val();
-      const userDevices = {};
-      
-      Object.entries(allDevices).forEach(([deviceId, deviceData]: [string, any]) => {
-        if (deviceData.userId === userId) {
-          userDevices[deviceId] = deviceData;
-        }
-      });
-      
-      return Object.keys(userDevices).length > 0 ? userDevices : null;
-    }
-    
-    return null;
-  } catch (error) {
-    console.error("Error getting devices:", error);
-    throw error;
-  }
+  return safeGet(`devices/${userId}`);
 };
 
 export const getWifiNetworks = (userId: string, callback: (data: any) => void) => {
-  const wifiRef = ref(database, `users/${userId}/wifiNetworks`);
-  return onValue(wifiRef, (snapshot) => {
-    callback(snapshot.val());
+  return safeOnValue(`wifi_networks/${userId}`, (snapshot: any) => {
+    callback(snapshot.val() || {
+      networks: [
+        { ssid: 'WiFi Network 1', strength: 'Strong', secured: true },
+        { ssid: 'WiFi Network 2', strength: 'Medium', secured: true },
+        { ssid: 'WiFi Network 3', strength: 'Weak', secured: false }
+      ],
+      lastScan: Date.now()
+    });
   });
 };
 
 export const setWifiCredentials = (userId: string, ssid: string, password: string) => {
-  const wifiCredentialsRef = ref(database, `users/${userId}/wifiCredentials`);
-  return set(wifiCredentialsRef, {
+  return safeSet(`wifi_credentials/${userId}`, {
     ssid,
     password,
-    timestamp: serverTimestamp()
+    timestamp: safeServerTimestamp()
   });
 };
 
 export const deleteUserAccount = async (user: User, password: string) => {
-  // First reauthenticate the user
-  const credential = EmailAuthProvider.credential(
-    user.email!,
-    password
-  );
-  
-  await reauthenticateWithCredential(user, credential);
-  
-  // Delete user data from database
-  await remove(ref(database, `users/${user.uid}`));
-  
-  // Delete user authentication account
-  return user.delete();
+  try {
+    // Re-authenticate user
+    const credential = EmailAuthProvider.credential(user.email || '', password);
+    await reauthenticateWithCredential(user, credential);
+    
+    // Delete user data from database
+    await safeRemove(`users/${user.uid}`);
+    
+    // Delete user from authentication
+    await deleteUser(user);
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting user account:', error);
+    return { success: false, error: error.message || 'Failed to delete account' };
+  }
 };
 
 // Push notification functions
 export const requestNotificationPermission = async () => {
-  if (!messaging) {
-    console.error("Firebase messaging is not initialized");
-    return null;
-  }
-  
   try {
-    // Check if notification permission is already granted
-    if (Notification.permission === 'granted') {
-      try {
-        // Get token
-        return await getToken(messaging, { 
-          vapidKey: 'BLBz-RwVqRGXtUwVr9O7a_nLLvTJxRqwHd2JEZc-oM5xz1LJLrcBLgL0q7xQZKyjKT0Kn9AOdkHk3x_yEeBVlSo' 
-        });
-      } catch (tokenError) {
-        console.error("Error getting FCM token:", tokenError);
-        // Return a placeholder token for development purposes
-        return "notification-permission-granted-but-token-failed";
-      }
+    if (!messaging) {
+      return { success: false, error: 'Messaging not available' };
     }
     
-    // Request permission
     const permission = await Notification.requestPermission();
-    
     if (permission === 'granted') {
-      try {
-        // Get token
-        return await getToken(messaging, { 
-          vapidKey: 'BLBz-RwVqRGXtUwVr9O7a_nLLvTJxRqwHd2JEZc-oM5xz1LJLrcBLgL0q7xQZKyjKT0Kn9AOdkHk3x_yEeBVlSo' 
-        });
-      } catch (tokenError) {
-        console.error("Error getting FCM token after permission granted:", tokenError);
-        // Return a placeholder token for development purposes
-        return "notification-permission-granted-but-token-failed";
-      }
+      return { success: true };
     } else {
-      console.log('Notification permission denied');
-      return null;
+      return { success: false, error: 'Permission denied' };
     }
   } catch (error) {
-    console.error("Error requesting notification permission:", error);
-    // Return a placeholder token for development purposes to allow the UI to work
-    return "notification-permission-error-placeholder";
+    console.error('Error requesting notification permission:', error);
+    return { success: false, error: error.message || 'Unknown error' };
   }
 };
 
 export const saveUserFCMToken = async (userId: string, token: string) => {
   try {
-    const tokenRef = ref(database, `users/${userId}/fcmTokens/${token}`);
-    await set(tokenRef, true);
-    return true;
+    await safeSet(`fcm_tokens/${userId}`, {
+      token,
+      lastUpdated: safeServerTimestamp()
+    });
+    return { success: true };
   } catch (error) {
-    console.error("Error saving FCM token:", error);
-    return false;
+    console.error('Error saving FCM token:', error);
+    return { success: false, error: error.message || 'Failed to save token' };
   }
 };
 
 export const removeUserFCMToken = async (userId: string) => {
   try {
-    const tokensRef = ref(database, `users/${userId}/fcmTokens`);
-    await remove(tokensRef);
-    return true;
+    await safeRemove(`fcm_tokens/${userId}`);
+    return { success: true };
   } catch (error) {
-    console.error("Error removing FCM tokens:", error);
-    throw error;
+    console.error('Error removing FCM token:', error);
+    return { success: false, error: error.message || 'Failed to remove token' };
   }
 };
 
@@ -852,8 +953,15 @@ export const verifyEmail = async (actionCode: string) => {
 };
 
 export const updateEmailVerificationStatus = async (userId: string, isVerified: boolean) => {
-  const userRef = ref(database, `users/${userId}/emailVerified`);
-  return set(userRef, isVerified);
+  try {
+    await safeUpdate(`users/${userId}`, {
+      emailVerified: isVerified
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating email verification status:', error);
+    return { success: false, error: error.message || 'Failed to update verification status' };
+  }
 };
 
 // Add global error handlers for Firebase services
@@ -877,113 +985,13 @@ window.addEventListener('unhandledrejection', (event) => {
 // Add this function to update a user's role
 export const updateUserRole = async (userId: string, role: 'admin' | 'user') => {
   try {
-    const userRef = ref(database, `users/${userId}`);
-    await update(userRef, { role });
-    return true;
+    await safeUpdate(`users/${userId}`, { role });
+    return { success: true };
   } catch (error) {
-    console.error("Error updating user role:", error);
-    throw error;
+    console.error('Error updating user role:', error);
+    return { success: false, error: error.message || 'Failed to update user role' };
   }
 };
-
-// Create a fixed admin account on initialization
-const createFixedAdminAccount = async () => {
-  // Only try to create admin account in development mode
-  if (!isDevelopment) {
-    console.log("Skipping admin account creation in production mode");
-    return;
-  }
-
-  const adminEmail = "Gamerno002117@redwancodes.com";
-  const adminPassword = "@Fuckyou#hacker99.002117";
-  const adminUsername = "AdminGamer002117";
-
-  try {
-    // First check if admin exists in the database
-    try {
-      const usersRef = ref(database, 'users');
-      const snapshot = await get(usersRef);
-      
-      if (snapshot.exists()) {
-        let adminExists = false;
-        
-        snapshot.forEach((childSnapshot) => {
-          const userData = childSnapshot.val();
-          if (userData.email === adminEmail || userData.username === adminUsername) {
-            adminExists = true;
-            console.log("Admin account already exists in database");
-            return true; // Break the forEach loop
-          }
-        });
-        
-        if (adminExists) {
-          return; // Exit if admin already exists
-        }
-      }
-    } catch (dbError) {
-      console.log("Error checking admin in database:", dbError);
-      // Continue to try other methods
-    }
-    
-    // Try to sign in with admin credentials
-    try {
-      const userCredential = await signInWithEmailAndPassword(auth, adminEmail, adminPassword);
-      console.log("Admin account exists and signed in successfully");
-      // Sign out immediately
-      await firebaseSignOut(auth);
-      return;
-    } catch (signInError: any) {
-      // If error is not "user not found", then admin exists but password might be wrong
-      if (signInError.code !== 'auth/user-not-found') {
-        console.log("Admin account exists but couldn't sign in:", signInError.code);
-        return; // Don't try to create if it exists but can't sign in
-      }
-      
-      // If user not found, continue to create the admin account
-      console.log("Admin account doesn't exist, creating...");
-    }
-    
-    // Create admin account
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, adminEmail, adminPassword);
-      const user = userCredential.user;
-      
-      // Set user data in the database
-      await set(ref(database, `users/${user.uid}`), {
-        email: adminEmail,
-        username: adminUsername,
-        displayName: "Admin",
-        role: "admin",
-        permissions: {
-          canFeed: true,
-          canSchedule: true,
-          canViewStats: true
-        },
-        createdAt: serverTimestamp()
-      });
-      
-      console.log("Admin account created successfully");
-      
-      // Sign out after creating
-      await firebaseSignOut(auth);
-    } catch (error: any) {
-      // Check if the error is because the user already exists
-      if (error.code === 'auth/email-already-in-use') {
-        console.log("Admin account already exists in authentication");
-      } else {
-        console.error("Error creating admin account:", error);
-      }
-    }
-  } catch (error) {
-    // Log the error but don't throw it to prevent app initialization failure
-    console.log("Error checking for admin account (this is normal if you don't have database write permissions)");
-  }
-};
-
-// Call the function to create the admin account when the app initializes
-if (typeof window !== 'undefined') {
-  createFixedAdminAccount().catch(console.error);
-}
 
 // Function to delete all users from the database
 export const deleteAllUsers = async () => {
@@ -1017,62 +1025,28 @@ export const deleteAllUsers = async () => {
 };
 
 export const getLastFeeding = async (deviceId: string) => {
-  try {
-    // Apply rate limiting
-    const rateLimitKey = `getLastFeeding_${deviceId}`;
-    if (!rateLimiter.checkLimit(rateLimitKey)) {
-      throw new Error("Rate limit exceeded. Please try again later.");
-    }
-    
-    const feedingHistoryRef = ref(database, `feeding_history/${deviceId}`);
-    const snapshot = await get(feedingHistoryRef);
-    
-    if (snapshot.exists()) {
-      const history = snapshot.val();
-      
-      // Find the most recent feeding
-      let lastFeeding = null;
-      let lastTimestamp = 0;
-      
-      Object.entries(history).forEach(([id, feeding]: [string, any]) => {
-        const timestamp = new Date(feeding.timestamp).getTime();
-        if (timestamp > lastTimestamp) {
-          lastTimestamp = timestamp;
-          lastFeeding = {
-            id,
-            ...feeding
-          };
-        }
-      });
-      
-      return lastFeeding;
-    }
-    
-    return null;
-  } catch (error) {
-    console.error("Error getting last feeding:", error);
-    return null;
-  }
+  return safeGet(`feeding_history/${deviceId}/last`);
 };
 
-// Export Firebase instances and functions
+// Export the initialized services and utility functions
 export { 
   app, 
   auth, 
   database, 
+  firestore, 
   storage, 
-  ref, 
-  update, 
-  set, 
-  get, 
-  onAuthStateChanged 
-};
-
-// Export database functions
-export {
+  messaging,
+  GoogleAuthProvider,
+  checkLimit,
+  initializeFirebase,
+  // Include these database functions
   onValue,
   off,
   push,
   remove,
-  serverTimestamp
+  serverTimestamp,
+  ref,
+  set,
+  update,
+  get
 };

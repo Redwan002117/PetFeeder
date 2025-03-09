@@ -4,8 +4,13 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#4f46e5" />
-    <meta name="description" content="PetFeeder - Smart pet feeding solution" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="PetFeeder - Smart pet feeding solution - Control your pet feeder remotely" />
+    <!-- Fix for WebSocket token error -->
+    <script>
+      // Define __WS_TOKEN__ if it's not defined (prevents errors in production)
+      window.__WS_TOKEN__ = window.__WS_TOKEN__ || null;
+    </script>
     <title>PetFeeder</title>
     <script>
       // Initialize dark mode before app loads to prevent flickering

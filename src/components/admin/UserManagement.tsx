@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { database, ref, get, update, remove } from '@/lib/firebase';
+import { database } from '@/lib/firebase';
+import { safeRef, safeGet, safeUpdate, safeRemove } from '@/lib/firebase-utils';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, Users, UserPlus, Trash2, Shield, PawPrint } from "lucide-react";
@@ -42,168 +43,196 @@ export const UserManagement: React.FC = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
+
+      // Use safeRef instead of ref
+      const usersRef = safeRef('users');
       
-      // Fetch users from Firebase Realtime Database
-      const usersRef = ref(database, 'users');
-      const usersSnapshot = await get(usersRef);
-      
-      if (!usersSnapshot.exists()) {
+      if (!usersRef) {
         setUsers([]);
         setLoading(false);
         return;
       }
-      
+
+      // Use safeGet instead of get
+      const usersSnapshot = await safeGet('users');
+
+      if (!usersSnapshot || !usersSnapshot.exists()) {
+        setUsers([]);
+        setLoading(false);
+        return;
+      }
+
       const usersData = usersSnapshot.val();
-      
-      // Convert to array
-      const usersArray = Object.entries(usersData || {}).map(([id, data]: [string, any]) => ({
-        id,
-        email: data.email || '',
-        displayName: data.displayName || 'Unknown User',
-        photoURL: data.photoURL || '',
-        role: data.role || 'user',
-        createdAt: data.createdAt || 0,
-        lastLogin: data.lastLogin || 0,
-        isActive: data.isActive !== false, // Default to true if not specified
-        permissions: {
-          canSchedule: data.permissions?.canSchedule !== false,
-          canFeed: data.permissions?.canFeed !== false,
-          canViewStats: data.permissions?.canViewStats !== false,
-          canManageDevices: data.permissions?.canManageDevices !== false,
+
+      // Convert to array and add id
+      const usersArray = Object.keys(usersData).map(key => ({
+        id: key,
+        ...usersData[key],
+        // Set default values for missing properties
+        displayName: usersData[key].displayName || 'Unknown User',
+        role: usersData[key].role || 'user',
+        createdAt: usersData[key].createdAt || 0,
+        lastLogin: usersData[key].lastLogin || 0,
+        isActive: usersData[key].isActive !== false, // Default to true
+        permissions: usersData[key].permissions || {
+          canSchedule: true,
+          canFeed: true,
+          canViewStats: true,
+          canManageDevices: false
         }
       }));
-      
-      // Sort users by role (admin first) and then by display name
+
+      // Sort by role (admin first) then by name
       usersArray.sort((a, b) => {
         if (a.role === 'admin' && b.role !== 'admin') return -1;
         if (a.role !== 'admin' && b.role === 'admin') return 1;
         return a.displayName.localeCompare(b.displayName);
       });
-      
+
       setUsers(usersArray);
     } catch (error) {
-      console.error('Error fetching users:', error);
+      console.error("Error fetching users:", error);
       toast({
         title: "Error",
         description: "Failed to load users. Please try again later.",
-        variant: "destructive",
+        variant: "destructive"
       });
     } finally {
       setLoading(false);
     }
   };
 
-  const handlePermissionChange = async (userId: string, permission: string, value: boolean) => {
+  const handlePermissionChange = async (userId: string, permission: keyof User['permissions'], value: boolean) => {
     try {
-      // Update the permission in Firebase
-      const userRef = ref(database, `users/${userId}/permissions`);
-      await update(userRef, {
+      // Skip if trying to modify current user
+      if (currentUser && userId === currentUser.uid) {
+        toast({
+          title: "Permission Denied",
+          description: "You cannot modify your own permissions.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Use safeUpdate instead of update
+      const success = await safeUpdate(`users/${userId}/permissions`, {
         [permission]: value
       });
-      
-      // Update local state
-      setUsers(users.map(user => {
-        if (user.id === userId) {
-          return {
-            ...user,
-            permissions: {
-              ...user.permissions,
-              [permission]: value
-            }
-          };
-        }
-        return user;
-      }));
-      
-      toast({
-        title: "Permission Updated",
-        description: `User permission has been updated successfully.`,
-      });
+
+      if (success) {
+        // Update local state
+        setUsers(users.map(user => 
+          user.id === userId 
+            ? { ...user, permissions: { ...user.permissions, [permission]: value } } 
+            : user
+        ));
+
+        toast({
+          title: "Permission Updated",
+          description: `User permission has been updated successfully.`,
+        });
+      } else {
+        toast({
+          title: "Update Failed",
+          description: "Failed to update user permission. Please try again.",
+          variant: "destructive"
+        });
+      }
     } catch (error) {
-      console.error('Error updating permission:', error);
+      console.error("Error updating permission:", error);
       toast({
-        title: "Error",
-        description: "Failed to update permission. Please try again.",
-        variant: "destructive",
+        title: "Update Failed",
+        description: "An error occurred while updating the permission.",
+        variant: "destructive"
       });
     }
   };
 
-  const handleRoleChange = async (userId: string, newRole: string) => {
-    // Prevent users from changing their own role
-    if (currentUser && userId === currentUser.uid) {
-      toast({
-        title: "Action Denied",
-        description: "You cannot change your own role.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
+  const handleRoleChange = async (userId: string, newRole: 'admin' | 'user') => {
     try {
-      // Update the role in Firebase
-      const userRef = ref(database, `users/${userId}`);
-      await update(userRef, {
+      // Skip if trying to modify current user
+      if (currentUser && userId === currentUser.uid) {
+        toast({
+          title: "Permission Denied",
+          description: "You cannot modify your own role.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Use safeUpdate instead of update
+      const success = await safeUpdate(`users/${userId}`, {
         role: newRole
       });
-      
-      // Update local state
-      setUsers(users.map(user => {
-        if (user.id === userId) {
-          return {
-            ...user,
-            role: newRole
-          };
-        }
-        return user;
-      }));
-      
-      toast({
-        title: "Role Updated",
-        description: `User role has been updated to ${newRole}.`,
-      });
+
+      if (success) {
+        // Update local state
+        setUsers(users.map(user => 
+          user.id === userId 
+            ? { ...user, role: newRole } 
+            : user
+        ));
+
+        toast({
+          title: "Role Updated",
+          description: `User role has been updated to ${newRole}.`,
+        });
+      } else {
+        toast({
+          title: "Update Failed",
+          description: "Failed to update user role. Please try again.",
+          variant: "destructive"
+        });
+      }
     } catch (error) {
-      console.error('Error updating role:', error);
+      console.error("Error updating role:", error);
       toast({
-        title: "Error",
-        description: "Failed to update role. Please try again.",
-        variant: "destructive",
+        title: "Update Failed",
+        description: "An error occurred while updating the role.",
+        variant: "destructive"
       });
     }
   };
 
   const handleDeleteUser = async () => {
     if (!deleteUserId) return;
-    
-    // Prevent users from deleting themselves
-    if (currentUser && deleteUserId === currentUser.uid) {
-      toast({
-        title: "Action Denied",
-        description: "You cannot delete your own account from here.",
-        variant: "destructive",
-      });
-      setDeleteUserId(null);
-      return;
-    }
-    
+
     try {
-      // Delete the user from Firebase
-      const userRef = ref(database, `users/${deleteUserId}`);
-      await remove(userRef);
-      
-      // Update local state
-      setUsers(users.filter(user => user.id !== deleteUserId));
-      
-      toast({
-        title: "User Deleted",
-        description: "User has been deleted successfully.",
-      });
+      // Skip if trying to delete current user
+      if (currentUser && deleteUserId === currentUser.uid) {
+        toast({
+          title: "Permission Denied",
+          description: "You cannot delete your own account from here.",
+          variant: "destructive"
+        });
+        setDeleteUserId(null);
+        return;
+      }
+
+      // Use safeRemove instead of remove
+      const success = await safeRemove(`users/${deleteUserId}`);
+
+      if (success) {
+        // Update local state
+        setUsers(users.filter(user => user.id !== deleteUserId));
+
+        toast({
+          title: "User Deleted",
+          description: "User has been deleted successfully.",
+        });
+      } else {
+        toast({
+          title: "Deletion Failed",
+          description: "Failed to delete user. Please try again.",
+          variant: "destructive"
+        });
+      }
     } catch (error) {
-      console.error('Error deleting user:', error);
+      console.error("Error deleting user:", error);
       toast({
-        title: "Error",
-        description: "Failed to delete user. Please try again.",
-        variant: "destructive",
+        title: "Deletion Failed",
+        description: "An error occurred while deleting the user.",
+        variant: "destructive"
       });
     } finally {
       setDeleteUserId(null);
@@ -217,14 +246,14 @@ export const UserManagement: React.FC = () => {
 
   // Setup real-time updates for user login status
   useEffect(() => {
-    const usersRef = ref(database, 'users');
+    const usersRef = safeRef('users');
     
     // Set up a listener for changes to the users node
-    const unsubscribe = get(usersRef).then((snapshot) => {
+    const unsubscribe = safeGet('users').then((snapshot) => {
       if (snapshot.exists()) {
         // Set up individual listeners for each user's lastLogin
         Object.keys(snapshot.val()).forEach((userId) => {
-          const userLoginRef = ref(database, `users/${userId}/lastLogin`);
+          const userLoginRef = safeRef(`users/${userId}/lastLogin`);
           
           // Listen for changes to lastLogin
           const onLoginChange = (snapshot: any) => {
@@ -241,7 +270,7 @@ export const UserManagement: React.FC = () => {
           };
           
           // Attach the listener
-          get(userLoginRef).then(onLoginChange);
+          safeGet(userLoginRef).then(onLoginChange);
         });
       }
     });

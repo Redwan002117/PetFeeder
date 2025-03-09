@@ -9,37 +9,11 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://*.firebaseio.com https://*.firebasedatabase.app; script-src 'self' 'unsafe-inline' https://apis.google.com https://www.gstatic.com https://*.firebaseio.com https://*.firebasedatabase.app https://cdn.gpteng.co https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.googleusercontent.com; connect-src 'self' https://*.firebaseio.com https://*.firebasedatabase.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; frame-src 'self' https://accounts.google.com https://petfeeder.redwancodes.com; object-src 'none';" />
     <link rel="apple-touch-icon" href="/logo192.png" />
     <link rel="manifest" href="/manifest.json" />
+    <script>
+      // Fix for WebSocket token error
+      window.__WS_TOKEN__ = window.__WS_TOKEN__ || null;
+    </script>
     <title>PetFeeder</title>
-    <!-- Fix for WebSocket token error -->
-    <script>
-      // Define __WS_TOKEN__ if it's not defined (prevents errors in production)
-      if (typeof window.__WS_TOKEN__ === 'undefined') {
-        window.__WS_TOKEN__ = null;
-      }
-    </script>
-    <!-- Fix for Firebase database issues -->
-    <script>
-      // Add a global error handler for Firebase errors
-      window.addEventListener('error', function(event) {
-        // Check if the error is related to Firebase
-        if (event.message && (
-          event.message.includes('Firebase') || 
-          event.message.includes('database') ||
-          event.message.includes('firestore')
-        )) {
-          console.warn('Firebase error caught by global handler:', event.message);
-          
-          // Prevent the error from showing in the console
-          event.preventDefault();
-          
-          // You could also show a user-friendly message here
-          if (!window.firebaseErrorShown) {
-            window.firebaseErrorShown = true;
-            console.log('Firebase services may not be available. Check your configuration.');
-          }
-        }
-      });
-    </script>
   </head>
   <body>
     <div id="root"></div>

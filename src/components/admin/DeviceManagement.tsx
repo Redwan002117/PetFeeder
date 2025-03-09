@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { database, ref, get, update, onValue, off, push, remove } from '@/lib/firebase';
+import { database } from '@/lib/firebase';
+import { safeRef, safeGet, safeUpdate, safeOnValue, safePush, safeRemove } from '@/lib/firebase-utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -53,6 +54,9 @@ export const DeviceManagement: React.FC = () => {
   const [newDeviceName, setNewDeviceName] = useState('');
   const [newDeviceModel, setNewDeviceModel] = useState('');
   const [newDeviceSerial, setNewDeviceSerial] = useState('');
+  const [newDeviceLocation, setNewDeviceLocation] = useState('');
+  const [newDeviceOwner, setNewDeviceOwner] = useState('');
+  const [newDeviceOwnerName, setNewDeviceOwnerName] = useState('');
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
   const [deviceStats, setDeviceStats] = useState<DeviceStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
@@ -62,49 +66,70 @@ export const DeviceManagement: React.FC = () => {
   const devicesRef = useRef<any>(null);
   const { toast } = useToast();
   const [deleteDeviceId, setDeleteDeviceId] = useState<string | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
 
   useEffect(() => {
-    // Set up real-time listener for devices
-    devicesRef.current = ref(database, 'devices');
-    
-    const devicesListener = onValue(devicesRef.current, (snapshot) => {
-      if (!snapshot.exists()) {
-        setDevices([]);
-        setLoading(false);
-        return;
-      }
-      
-      const devicesData = snapshot.val();
-      
-      // Convert to array
-      const devicesArray = Object.entries(devicesData || {}).map(([id, data]: [string, any]) => ({
-        id,
-        ...data,
-        lastSeen: data.lastSeen || 0,
-        lastConnected: data.lastConnected || 0
-      }));
-      
-      // Sort devices by name
-      devicesArray.sort((a, b) => a.name.localeCompare(b.name));
-      
-      setDevices(devicesArray);
-      setLoading(false);
-    });
-    
-    // Clean up listener on component unmount
+    fetchDevices();
     return () => {
-      if (devicesRef.current) {
-        off(devicesRef.current);
+      // Clean up any listeners
+      const devicesRef = safeRef('devices');
+      if (devicesRef) {
+        // No need to call off directly, we'll use the cleanup function from safeOnValue
       }
     };
   }, []);
+
+  const fetchDevices = async () => {
+    try {
+      setLoading(true);
+      const devicesRef = safeRef('devices');
+      
+      if (!devicesRef) {
+        setLoading(false);
+        setDevices([]);
+        return;
+      }
+
+      // Use safeOnValue instead of onValue
+      const unsubscribe = safeOnValue(
+        'devices',
+        (snapshot) => {
+          if (snapshot.exists()) {
+            const devicesData = snapshot.val();
+            const devicesArray = Object.keys(devicesData).map(key => ({
+              id: key,
+              ...devicesData[key]
+            }));
+            setDevices(devicesArray);
+          } else {
+            setDevices([]);
+          }
+          setLoading(false);
+        },
+        (error) => {
+          console.error("Error fetching devices:", error);
+          setLoading(false);
+          setDevices([]);
+        }
+      );
+
+      // Return the unsubscribe function for cleanup
+      return unsubscribe;
+    } catch (error) {
+      console.error("Error fetching devices:", error);
+      setLoading(false);
+      setDevices([]);
+    }
+  };
 
   const fetchDeviceStats = async (deviceId: string) => {
     setStatsLoading(true);
     try {
       // Fetch device stats from Firebase
-      const statsRef = ref(database, `deviceStats/${deviceId}`);
-      const statsSnapshot = await get(statsRef);
+      const statsRef = safeRef(`deviceStats/${deviceId}`);
+      const statsSnapshot = await safeGet(statsRef);
       
       if (!statsSnapshot.exists()) {
         // Create default stats if none exist
@@ -146,35 +171,40 @@ export const DeviceManagement: React.FC = () => {
     if (!editingDevice) return;
     
     try {
-      // Update device in Firebase Realtime Database
-      const deviceRef = ref(database, `devices/${editingDevice.id}`);
-      await update(deviceRef, {
+      setIsUpdating(true);
+      
+      const updates = {
         name: deviceName,
         status: deviceStatus,
-        location: deviceLocation
-      });
+        location: deviceLocation,
+        lastUpdated: Date.now()
+      };
       
-      // Update local state
-      setDevices(devices.map(device => 
-        device.id === editingDevice.id 
-          ? { ...device, name: deviceName, status: deviceStatus, location: deviceLocation } 
-          : device
-      ));
+      // Use safeUpdate instead of update
+      const success = await safeUpdate(`devices/${editingDevice.id}`, updates);
       
-      toast({
-        title: "Device Updated",
-        description: "Device information has been updated successfully.",
-        variant: "default",
-      });
-      
-      setEditingDevice(null);
+      if (success) {
+        toast({
+          title: "Device Updated",
+          description: `Device ${deviceName} has been updated successfully.`,
+        });
+        setEditingDevice(null);
+      } else {
+        toast({
+          title: "Update Failed",
+          description: "Failed to update device. Please try again.",
+          variant: "destructive"
+        });
+      }
     } catch (error) {
-      console.error('Error updating device:', error);
+      console.error("Error updating device:", error);
       toast({
         title: "Update Failed",
-        description: "Failed to update device information. Please try again.",
-        variant: "destructive",
+        description: "An error occurred while updating the device.",
+        variant: "destructive"
       });
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -183,48 +213,42 @@ export const DeviceManagement: React.FC = () => {
     setDeleteDialogOpen(true);
   };
 
-  const handleDeleteDevice = async () => {
-    if (!deviceToDelete) return;
-    
+  const handleDeleteDevice = async (deviceId: string) => {
     try {
-      // Delete device from Firebase Realtime Database
-      const deviceRef = ref(database, `devices/${deviceToDelete.id}`);
-      await remove(deviceRef);
+      setIsDeleting(true);
       
-      // Update local state
-      setDevices(devices.filter(device => device.id !== deviceToDelete.id));
+      // Use safeRemove instead of remove
+      const success = await safeRemove(`devices/${deviceId}`);
       
-      toast({
-        title: "Device Deleted",
-        description: "Device has been deleted successfully.",
-        variant: "default",
-      });
-      
-      setDeleteDialogOpen(false);
-      setDeviceToDelete(null);
+      if (success) {
+        toast({
+          title: "Device Deleted",
+          description: "The device has been deleted successfully.",
+        });
+        setDeleteDialogOpen(false);
+      } else {
+        toast({
+          title: "Deletion Failed",
+          description: "Failed to delete device. Please try again.",
+          variant: "destructive"
+        });
+      }
     } catch (error) {
-      console.error('Error deleting device:', error);
+      console.error("Error deleting device:", error);
       toast({
-        title: "Delete Failed",
-        description: "Failed to delete device. Please try again.",
-        variant: "destructive",
+        title: "Deletion Failed",
+        description: "An error occurred while deleting the device.",
+        variant: "destructive"
       });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
   const handleAddDevice = async () => {
-    if (!newDeviceName || !newDeviceModel || !newDeviceSerial) {
-      toast({
-        title: "Validation Error",
-        description: "Please fill in all required fields.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
     try {
-      // Create new device in Firebase
-      const newDeviceRef = push(ref(database, 'devices'));
+      setIsAdding(true);
+      
       const newDevice = {
         name: newDeviceName,
         model: newDeviceModel,
@@ -232,68 +256,78 @@ export const DeviceManagement: React.FC = () => {
         status: 'offline',
         firmwareVersion: '1.0.0',
         lastSeen: Date.now(),
+        userId: newDeviceOwner,
         foodLevel: 100,
         batteryLevel: 100,
-        location: 'Default Location',
+        location: newDeviceLocation,
         lastConnected: Date.now(),
-        owner: ''
+        owner: newDeviceOwnerName,
+        createdAt: Date.now()
       };
       
-      await update(newDeviceRef, newDevice);
+      // Use safePush instead of push and set
+      const deviceId = await safePush('devices', newDevice);
       
-      toast({
-        title: "Device Added",
-        description: "New device has been added successfully.",
-        variant: "default",
-      });
-      
-      // Reset form
-      setNewDeviceName('');
-      setNewDeviceModel('');
-      setNewDeviceSerial('');
-      setAddDeviceDialogOpen(false);
+      if (deviceId) {
+        toast({
+          title: "Device Added",
+          description: `Device ${newDeviceName} has been added successfully.`,
+        });
+        setNewDeviceName('');
+        setNewDeviceModel('');
+        setNewDeviceSerial('');
+        setNewDeviceLocation('');
+        setNewDeviceOwner('');
+        setNewDeviceOwnerName('');
+        setAddDeviceDialogOpen(false);
+      } else {
+        toast({
+          title: "Add Failed",
+          description: "Failed to add device. Please try again.",
+          variant: "destructive"
+        });
+      }
     } catch (error) {
-      console.error('Error adding device:', error);
+      console.error("Error adding device:", error);
       toast({
         title: "Add Failed",
-        description: "Failed to add new device. Please try again.",
-        variant: "destructive",
+        description: "An error occurred while adding the device.",
+        variant: "destructive"
       });
+    } finally {
+      setIsAdding(false);
     }
   };
 
   const handleScheduleMaintenance = async () => {
-    if (!selectedDevice) return;
+    if (!selectedDevice || !maintenanceNotes) return;
     
     try {
       // Update device status and add maintenance record
-      const deviceRef = ref(database, `devices/${selectedDevice.id}`);
-      await update(deviceRef, {
+      await safeUpdate(`devices/${selectedDevice.id}`, {
         status: 'maintenance'
       });
       
       // Add maintenance record
-      const maintenanceRef = push(ref(database, `maintenance/${selectedDevice.id}`));
-      await update(maintenanceRef, {
+      const maintenanceId = await safePush(`maintenance/${selectedDevice.id}`, {
         date: Date.now(),
         notes: maintenanceNotes,
-        completed: false
+        status: 'scheduled'
       });
       
       toast({
         title: "Maintenance Scheduled",
-        description: "Device has been scheduled for maintenance.",
-        variant: "default",
+        description: "Device maintenance has been scheduled successfully.",
       });
       
-      setMaintenanceDialogOpen(false);
       setMaintenanceNotes('');
+      setMaintenanceDialogOpen(false);
     } catch (error) {
       console.error('Error scheduling maintenance:', error);
       toast({
-        title: "Schedule Failed",
+        title: "Error",
         description: "Failed to schedule maintenance. Please try again.",
-        variant: "destructive",
+        variant: "destructive"
       });
     }
   };
@@ -364,51 +398,11 @@ export const DeviceManagement: React.FC = () => {
     return date.toLocaleString();
   };
 
-  const fetchDevices = async () => {
-    try {
-      setLoading(true);
-      
-      // Fetch devices from Firebase Realtime Database
-      const devicesRef = ref(database, 'devices');
-      const devicesSnapshot = await get(devicesRef);
-      
-      if (!devicesSnapshot.exists()) {
-        setDevices([]);
-        setLoading(false);
-        return;
-      }
-      
-      const devicesData = devicesSnapshot.val();
-      
-      // Convert to array
-      const devicesArray = Object.entries(devicesData || {}).map(([id, data]: [string, any]) => ({
-        id,
-        ...data,
-        lastSeen: data.lastSeen || 0,
-        lastConnected: data.lastConnected || 0
-      }));
-      
-      // Sort devices by name
-      devicesArray.sort((a, b) => a.name.localeCompare(b.name));
-      
-      setDevices(devicesArray);
-    } catch (error) {
-      console.error('Error fetching devices:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load devices. Please try again later.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleStatusChange = async (deviceId: string, newStatus: 'online' | 'offline' | 'maintenance') => {
     try {
       // Update the status in Firebase
-      const deviceRef = ref(database, `devices/${deviceId}`);
-      await update(deviceRef, {
+      const deviceRef = safeRef(`devices/${deviceId}`);
+      await safeUpdate(deviceRef, {
         status: newStatus
       });
       
@@ -535,11 +529,11 @@ export const DeviceManagement: React.FC = () => {
                 <div>
                   <p className="text-sm font-medium text-gray-500">Last Seen</p>
                   <p>{formatLastSeen(selectedDevice.lastSeen)}</p>
-                </div>
+                    </div>
                 <div>
                   <p className="text-sm font-medium text-gray-500">Location</p>
                   <p>{selectedDevice.location || 'Not specified'}</p>
-                </div>
+                    </div>
               </CardContent>
             </Card>
             
@@ -554,7 +548,7 @@ export const DeviceManagement: React.FC = () => {
                     <p className="text-sm font-medium">{selectedDevice.foodLevel}%</p>
                   </div>
                   <Progress value={selectedDevice.foodLevel} className="h-2" />
-                </div>
+                  </div>
                 
                 {selectedDevice.batteryLevel !== undefined && (
                   <div>
@@ -769,7 +763,7 @@ export const DeviceManagement: React.FC = () => {
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleDeleteDevice}>
+            <Button variant="destructive" onClick={() => handleDeleteDevice(deviceToDelete?.id || '')}>
               Delete Device
             </Button>
           </DialogFooter>
@@ -850,7 +844,7 @@ export const DeviceManagement: React.FC = () => {
                 className="w-full min-h-[100px] p-2 border rounded-md"
               />
             </div>
-          </div>
+      </div>
           
           <DialogFooter>
             <Button variant="outline" onClick={() => setMaintenanceDialogOpen(false)}>

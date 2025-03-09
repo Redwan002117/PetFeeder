@@ -9,8 +9,8 @@ import { useToast } from "@/components/ui/use-toast";
 import ChangePasswordForm from "@/components/ChangePasswordForm";
 import DeleteAccountForm from "@/components/DeleteAccountForm";
 import NotificationSettings from "@/components/NotificationSettings";
-import { uploadProfilePicture, database, ref, update, set } from "@/lib/firebase";
-import { serverTimestamp } from "firebase/database";
+import { uploadProfilePicture, database } from "@/lib/firebase";
+import { safeRef, safeUpdate, safeServerTimestamp } from "@/lib/firebase-utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import ProfileAvatar from "@/components/ProfileAvatar";
@@ -68,10 +68,10 @@ const Profile = () => {
         await updateProfile(currentUser, { photoURL });
         
         // Update the user's profile in the database
-        const userRef = ref(database, `users/${currentUser.uid}`);
-        await update(userRef, {
+        const userRef = safeRef(database, `users/${currentUser.uid}`);
+        await safeUpdate(userRef, {
           photoURL,
-          updatedAt: serverTimestamp()
+          updatedAt: safeServerTimestamp()
         });
         
         toast({
@@ -184,92 +184,49 @@ const Profile = () => {
   };
 
   const handleRequestAdminAccess = async () => {
-    if (!currentUser) {
-      toast({
-        title: "Error",
-        description: "You must be logged in to request admin access.",
-        variant: "destructive",
-      });
-      return;
-    }
+    if (!currentUser) return;
     
     setAdminRequestLoading(true);
     
     try {
-      // Simulate a network request delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Create the approval and denial URLs
+      const baseUrl = window.location.origin;
+      const approveUrl = `${baseUrl}/admin?action=approve&userId=${currentUser.uid}`;
+      const denyUrl = `${baseUrl}/admin?action=deny&userId=${currentUser.uid}`;
       
-      // Send a real email to the admin using our email service
-      try {
-        const emailResult = await sendAdminRequestEmail(
-          currentUser.email || 'unknown@example.com',
-          currentUser.displayName || 'PetFeeder User',
-          currentUser.uid,
-          `User ${currentUser.email} (${currentUser.displayName || 'Unknown User'}) has requested admin access.`
-        );
-        
-        if (emailResult.success) {
-          console.log('Admin request email sent successfully');
-          
-          // Store the admin request in the user's own document where they have permission
-          try {
-            // Update the user's profile to indicate they've requested admin access
-            const userRef = ref(database, `users/${currentUser.uid}`);
-            await update(userRef, {
-              adminRequestStatus: 'pending',
-              adminRequestDate: serverTimestamp()
-            });
-            
-            // Show success message
-            toast({
-              title: "Request Sent",
-              description: "Your admin access request has been sent successfully.",
-              variant: "default",
-            });
-            
-            setAdminRequestSent(true);
-          } catch (dbError) {
-            console.error('Error updating user profile with admin request:', dbError);
-            
-            // If we get a permission denied error, still consider it a success if the email was sent
-            if (dbError.message && dbError.message.includes('Permission denied')) {
-              toast({
-                title: "Request Sent",
-                description: "Your admin access request email has been sent. Database update failed due to permissions, but the admin has been notified.",
-                variant: "default",
-              });
-              setAdminRequestSent(true);
-            } else {
-              // For other errors, show an error message
-              toast({
-                title: "Partial Success",
-                description: "Email sent but failed to update your profile. Please try again later.",
-                variant: "destructive",
-              });
-            }
-          }
-        } else {
-          // Email sending failed
-          console.error('Failed to send admin request email:', emailResult.message);
-          toast({
-            title: "Request Failed",
-            description: "Failed to send admin access request email. Please try again later.",
-            variant: "destructive",
-          });
-        }
-      } catch (emailError) {
-        console.error('Error sending admin request email:', emailError);
-        toast({
-          title: "Request Failed",
-          description: "Failed to send admin access request. Please try again later.",
-          variant: "destructive",
-        });
+      // Update the database to mark the request as pending using safe utilities
+      const success = await safeUpdate(`users/${currentUser.uid}`, {
+        adminRequestStatus: 'pending',
+        adminRequestDate: safeServerTimestamp()
+      });
+      
+      if (!success) {
+        throw new Error("Failed to update database");
       }
-    } catch (error) {
-      console.error('Error in admin request process:', error);
+      
+      // Send the admin request email
+      const userData = {
+        displayName: currentUser.displayName || 'Unknown User',
+        email: currentUser.email || 'no-email@example.com',
+        uid: currentUser.uid
+      };
+      
+      const emailResult = await sendAdminRequestEmail(userData, approveUrl, denyUrl);
+      
+      if (emailResult.success) {
+        toast({
+          title: "Request Sent",
+          description: "Your admin access request has been sent successfully.",
+        });
+        setAdminRequestSent(true);
+      } else {
+        throw new Error(emailResult.error || "Failed to send email");
+      }
+    } catch (error: any) {
+      console.error("Error requesting admin access:", error);
       toast({
         title: "Request Failed",
-        description: "An unexpected error occurred. Please try again later.",
+        description: error.message || "Failed to request admin access. Please try again later.",
         variant: "destructive",
       });
     } finally {
@@ -479,14 +436,16 @@ const Profile = () => {
           </CardContent>
         </Card>
         
-        {/* Notification Settings Card */}
+        {/* Security Card */}
         <Card className="md:col-span-3">
           <CardHeader>
-            <CardTitle>Notification Settings</CardTitle>
-            <CardDescription>Configure how you receive notifications</CardDescription>
+            <CardTitle>Security</CardTitle>
+            <CardDescription>Manage your account security</CardDescription>
           </CardHeader>
           <CardContent>
-            <NotificationSettings />
+            <div className="space-y-4">
+              <ChangePasswordForm />
+            </div>
           </CardContent>
         </Card>
         

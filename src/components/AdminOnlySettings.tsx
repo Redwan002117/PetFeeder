@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -15,6 +15,9 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { sendTestEmail } from "@/services/email-service";
+import { Separator } from "@/components/ui/separator";
+import { Loader2 } from "lucide-react";
 
 // Define schema for SMTP settings form
 const smtpFormSchema = z.object({
@@ -150,419 +153,394 @@ const AdminOnlySettings = () => {
     }
   };
 
-  return (
-    <Tabs defaultValue="email" className="w-full">
-      <TabsList className="mb-6">
-        <TabsTrigger value="email">Email Settings</TabsTrigger>
-        <TabsTrigger value="users">User Management</TabsTrigger>
-        <TabsTrigger value="system">System Settings</TabsTrigger>
-      </TabsList>
+  const EmailTestForm = () => {
+    const { toast } = useToast();
+    const [testEmail, setTestEmail] = useState("");
+    const [isSending, setIsSending] = useState(false);
+    
+    const handleTestEmail = async (e: React.FormEvent) => {
+      e.preventDefault();
       
-      <TabsContent value="email" className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Mail className="mr-2 h-5 w-5" />
-              Email Configuration
-            </CardTitle>
-            <CardDescription>
-              Configure system-wide email settings for notifications and admin requests
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="mb-6">
-              <Label htmlFor="email-provider" className="mb-2 block">Email Provider Type</Label>
-              <Select
-                value={smtpProvider}
-                onValueChange={(value) => setSmtpProvider(value)}
-              >
-                <SelectTrigger id="email-provider" className="w-full md:w-1/2">
-                  <SelectValue placeholder="Select provider type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="smtp">SMTP Server</SelectItem>
-                  <SelectItem value="api">Email API (EmailJS, SendGrid, etc.)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmitSMTPSettings)} className="space-y-6">
-                {smtpProvider === "smtp" ? (
-                  <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <FormField
-                        control={form.control}
-                        name="service"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Service</FormLabel>
-                            <Select
-                              onValueChange={field.onChange}
-                              defaultValue={field.value}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select service" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="gmail">Gmail</SelectItem>
-                                <SelectItem value="outlook">Outlook</SelectItem>
-                                <SelectItem value="yahoo">Yahoo</SelectItem>
-                                <SelectItem value="custom">Custom</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormDescription>
-                              Select your email service provider
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="host"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>SMTP Host</FormLabel>
-                            <FormControl>
-                              <Input placeholder="smtp.example.com" {...field} />
-                            </FormControl>
-                            <FormDescription>
-                              The hostname of your SMTP server
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="port"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>SMTP Port</FormLabel>
-                            <FormControl>
-                              <Input placeholder="587 or 465" {...field} />
-                            </FormControl>
-                            <FormDescription>
-                              The port for your SMTP server (usually 587 or 465)
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="secure"
-                        render={({ field }) => (
-                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                            <div className="space-y-0.5">
-                              <FormLabel className="text-base">
-                                Use Secure Connection (SSL/TLS)
-                              </FormLabel>
-                              <FormDescription>
-                                Enable for secure email transmission (recommended)
-                              </FormDescription>
-                            </div>
-                            <FormControl>
-                              <Switch
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                              />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="username"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>SMTP Username</FormLabel>
-                            <FormControl>
-                              <Input placeholder="your-email@example.com" {...field} />
-                            </FormControl>
-                            <FormDescription>
-                              Usually your email address
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="password"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>SMTP Password</FormLabel>
-                            <FormControl>
-                              <Input type="password" placeholder="••••••••" {...field} />
-                            </FormControl>
-                            <FormDescription>
-                              Your email password or app password
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-
-                    <FormField
-                      control={form.control}
-                      name="fromEmail"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>From Email</FormLabel>
-                          <FormControl>
-                            <Input placeholder="noreply@yourapp.com" {...field} />
-                          </FormControl>
-                          <FormDescription>
-                            The email address that will appear as the sender
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </>
-                ) : (
-                  <>
-                    <FormField
-                      control={form.control}
-                      name="service"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>API Service</FormLabel>
-                          <Select
-                            onValueChange={field.onChange}
-                            defaultValue={field.value}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select API service" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="emailjs">EmailJS</SelectItem>
-                              <SelectItem value="sendgrid">SendGrid</SelectItem>
-                              <SelectItem value="mailchimp">Mailchimp</SelectItem>
-                              <SelectItem value="custom">Other</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormDescription>
-                            Select your email API service
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="apiKey"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>API Key</FormLabel>
-                          <FormControl>
-                            <Input type="password" placeholder="Your API key" {...field} />
-                          </FormControl>
-                          <FormDescription>
-                            The API key for your email service
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="fromEmail"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>From Email</FormLabel>
-                          <FormControl>
-                            <Input placeholder="noreply@yourapp.com" {...field} />
-                          </FormControl>
-                          <FormDescription>
-                            The email address that will appear as the sender
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </>
-                )}
-
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <Button type="submit" disabled={isLoading}>
-                    {isLoading ? (
-                      <>
-                        <span className="mr-2">Saving...</span>
-                        <span className="animate-spin">⏳</span>
-                      </>
-                    ) : (
-                      <>
-                        <Server className="mr-2 h-4 w-4" />
-                        Save Settings
-                      </>
-                    )}
-                  </Button>
-                  
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    onClick={handleTestEmail}
-                    disabled={isLoading}
-                  >
-                    {isLoading ? (
-                      <>
-                        <span className="mr-2">Testing...</span>
-                        <span className="animate-spin">⏳</span>
-                      </>
-                    ) : (
-                      <>
-                        <Send className="mr-2 h-4 w-4" />
-                        Send Test Email
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
-      </TabsContent>
+      if (!testEmail) {
+        toast({
+          title: "Error",
+          description: "Please enter an email address to send the test to.",
+          variant: "destructive",
+        });
+        return;
+      }
       
-      <TabsContent value="users" className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Users className="mr-2 h-5 w-5" />
-              User Management
-            </CardTitle>
-            <CardDescription>
-              Manage user permissions and access levels
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-gray-500 mb-4">
-              Configure user roles and permissions for the application.
+      setIsSending(true);
+      
+      try {
+        const result = await sendTestEmail(testEmail);
+        
+        if (result.success) {
+          toast({
+            title: "Success",
+            description: "Test email sent successfully! Please check your inbox.",
+            variant: "default",
+          });
+        } else {
+          toast({
+            title: "Error",
+            description: `Failed to send test email: ${result.message}`,
+            variant: "destructive",
+          });
+        }
+      } catch (error) {
+        console.error("Error sending test email:", error);
+        toast({
+          title: "Error",
+          description: "An unexpected error occurred while sending the test email.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsSending(false);
+      }
+    };
+    
+    return (
+      <div className="space-y-4">
+        <div className="flex justify-between items-center">
+          <h3 className="text-lg font-medium">Test Email Configuration</h3>
+        </div>
+        
+        <form onSubmit={handleTestEmail} className="space-y-4">
+          <div className="grid gap-2">
+            <Label htmlFor="testEmail">Recipient Email</Label>
+            <Input
+              id="testEmail"
+              type="email"
+              placeholder="Enter email address to test"
+              value={testEmail}
+              onChange={(e) => setTestEmail(e.target.value)}
+              required
+            />
+            <p className="text-sm text-muted-foreground">
+              Send a test email to verify your email configuration is working correctly.
             </p>
+          </div>
+          
+          <Button type="submit" disabled={isSending}>
+            {isSending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Sending...
+              </>
+            ) : (
+              "Send Test Email"
+            )}
+          </Button>
+        </form>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Admin Settings</CardTitle>
+          <CardDescription>
+            Configure system-wide settings that affect all users.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="email">
+            <TabsList className="mb-4">
+              <TabsTrigger value="email">Email</TabsTrigger>
+              <TabsTrigger value="security">Security</TabsTrigger>
+              <TabsTrigger value="maintenance">Maintenance</TabsTrigger>
+            </TabsList>
             
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label htmlFor="allow-registration">Allow New Registrations</Label>
-                  <p className="text-xs text-gray-500">
-                    When disabled, new users cannot register for accounts
-                  </p>
+            <TabsContent value="email" className="space-y-6">
+              <form onSubmit={form.handleSubmit(onSubmitSMTPSettings)} className="space-y-4">
+                <div className="mb-6">
+                  <Label htmlFor="email-provider" className="mb-2 block">Email Provider Type</Label>
+                  <Select
+                    value={smtpProvider}
+                    onValueChange={(value) => setSmtpProvider(value)}
+                  >
+                    <SelectTrigger id="email-provider" className="w-full md:w-1/2">
+                      <SelectValue placeholder="Select provider type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="smtp">SMTP Server</SelectItem>
+                      <SelectItem value="api">Email API (EmailJS, SendGrid, etc.)</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                <Switch id="allow-registration" defaultChecked />
-              </div>
+
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit(onSubmitSMTPSettings)} className="space-y-6">
+                    {smtpProvider === "smtp" ? (
+                      <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <FormField
+                            control={form.control}
+                            name="service"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Service</FormLabel>
+                                <Select
+                                  onValueChange={field.onChange}
+                                  defaultValue={field.value}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Select service" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="gmail">Gmail</SelectItem>
+                                    <SelectItem value="outlook">Outlook</SelectItem>
+                                    <SelectItem value="yahoo">Yahoo</SelectItem>
+                                    <SelectItem value="custom">Custom</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <FormDescription>
+                                  Select your email service provider
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={form.control}
+                            name="host"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>SMTP Host</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="smtp.example.com" {...field} />
+                                </FormControl>
+                                <FormDescription>
+                                  The hostname of your SMTP server
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={form.control}
+                            name="port"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>SMTP Port</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="587 or 465" {...field} />
+                                </FormControl>
+                                <FormDescription>
+                                  The port for your SMTP server (usually 587 or 465)
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={form.control}
+                            name="secure"
+                            render={({ field }) => (
+                              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                                <div className="space-y-0.5">
+                                  <FormLabel className="text-base">
+                                    Use Secure Connection (SSL/TLS)
+                                  </FormLabel>
+                                  <FormDescription>
+                                    Enable for secure email transmission (recommended)
+                                  </FormDescription>
+                                </div>
+                                <FormControl>
+                                  <Switch
+                                    checked={field.value}
+                                    onCheckedChange={field.onChange}
+                                  />
+                                </FormControl>
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={form.control}
+                            name="username"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>SMTP Username</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="your-email@example.com" {...field} />
+                                </FormControl>
+                                <FormDescription>
+                                  Usually your email address
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={form.control}
+                            name="password"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>SMTP Password</FormLabel>
+                                <FormControl>
+                                  <Input type="password" placeholder="••••••••" {...field} />
+                                </FormControl>
+                                <FormDescription>
+                                  Your email password or app password
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+
+                        <FormField
+                          control={form.control}
+                          name="fromEmail"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>From Email</FormLabel>
+                              <FormControl>
+                                <Input placeholder="noreply@yourapp.com" {...field} />
+                              </FormControl>
+                              <FormDescription>
+                                The email address that will appear as the sender
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <FormField
+                          control={form.control}
+                          name="service"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>API Service</FormLabel>
+                              <Select
+                                onValueChange={field.onChange}
+                                defaultValue={field.value}
+                              >
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select API service" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="emailjs">EmailJS</SelectItem>
+                                  <SelectItem value="sendgrid">SendGrid</SelectItem>
+                                  <SelectItem value="mailchimp">Mailchimp</SelectItem>
+                                  <SelectItem value="custom">Other</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormDescription>
+                                Select your email API service
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="apiKey"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>API Key</FormLabel>
+                              <FormControl>
+                                <Input type="password" placeholder="Your API key" {...field} />
+                              </FormControl>
+                              <FormDescription>
+                                The API key for your email service
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="fromEmail"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>From Email</FormLabel>
+                              <FormControl>
+                                <Input placeholder="noreply@yourapp.com" {...field} />
+                              </FormControl>
+                              <FormDescription>
+                                The email address that will appear as the sender
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </>
+                    )}
+
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      <Button type="submit" disabled={isLoading}>
+                        {isLoading ? (
+                          <>
+                            <span className="mr-2">Saving...</span>
+                            <span className="animate-spin">⏳</span>
+                          </>
+                        ) : (
+                          <>
+                            <Server className="mr-2 h-4 w-4" />
+                            Save Settings
+                          </>
+                        )}
+                      </Button>
+                      
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        onClick={handleTestEmail}
+                        disabled={isLoading}
+                      >
+                        {isLoading ? (
+                          <>
+                            <span className="mr-2">Testing...</span>
+                            <span className="animate-spin">⏳</span>
+                          </>
+                        ) : (
+                          <>
+                            <Send className="mr-2 h-4 w-4" />
+                            Send Test Email
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </form>
+                </Form>
+              </form>
               
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label htmlFor="email-verification">Require Email Verification</Label>
-                  <p className="text-xs text-gray-500">
-                    Users must verify their email before accessing the application
-                  </p>
-                </div>
-                <Switch id="email-verification" defaultChecked />
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label htmlFor="admin-approval">Require Admin Approval</Label>
-                  <p className="text-xs text-gray-500">
-                    New accounts require admin approval before activation
-                  </p>
-                </div>
-                <Switch id="admin-approval" />
-              </div>
-            </div>
+              <Separator className="my-6" />
+              <EmailTestForm />
+            </TabsContent>
             
-            <Button className="mt-6">
-              <Users className="mr-2 h-4 w-4" />
-              View All Users
-            </Button>
-          </CardContent>
-        </Card>
-      </TabsContent>
-      
-      <TabsContent value="system" className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Database className="mr-2 h-5 w-5" />
-              System Configuration
-            </CardTitle>
-            <CardDescription>
-              Configure global system settings
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label htmlFor="maintenance-mode">Maintenance Mode</Label>
-                  <p className="text-xs text-gray-500">
-                    Put the application in maintenance mode (only admins can access)
-                  </p>
-                </div>
-                <Switch id="maintenance-mode" />
+            <TabsContent value="security">
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">Security Settings</h3>
               </div>
-              
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label htmlFor="debug-mode">Debug Mode</Label>
-                  <p className="text-xs text-gray-500">
-                    Enable detailed logging for troubleshooting
-                  </p>
-                </div>
-                <Switch id="debug-mode" />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="backup-frequency">Database Backup Frequency</Label>
-                <Select defaultValue="daily">
-                  <SelectTrigger id="backup-frequency">
-                    <SelectValue placeholder="Select backup frequency" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="hourly">Hourly</SelectItem>
-                    <SelectItem value="daily">Daily</SelectItem>
-                    <SelectItem value="weekly">Weekly</SelectItem>
-                    <SelectItem value="monthly">Monthly</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="api-rate-limit">API Rate Limit (requests per minute)</Label>
-                <Input id="api-rate-limit" type="number" defaultValue="60" />
-              </div>
-            </div>
+            </TabsContent>
             
-            <div className="flex flex-col sm:flex-row gap-4 mt-6">
-              <Button>
-                <Shield className="mr-2 h-4 w-4" />
-                Update System Settings
-              </Button>
-              
-              <Button variant="outline">
-                <Key className="mr-2 h-4 w-4" />
-                Regenerate API Keys
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </TabsContent>
-    </Tabs>
+            <TabsContent value="maintenance">
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">Maintenance Settings</h3>
+              </div>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+    </div>
   );
 };
 
