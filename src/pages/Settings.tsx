@@ -227,9 +227,8 @@ const Settings = () => {
       if (!currentUser) return;
       
       try {
-        const userDataSnapshot = await safeGet(`users/${currentUser.uid}`);
-        if (userDataSnapshot && userDataSnapshot.exists()) {
-          const userData = userDataSnapshot.val();
+        const userData = await safeGet(`users/${currentUser.uid}`);
+        if (userData) {
           setTwoFactorEnabled(userData.twoFactorEnabled || false);
         }
       } catch (error) {
@@ -291,10 +290,14 @@ const Settings = () => {
       
       setTwoFactorSecret(secret);
       
-      // Generate a fake QR code URL (in a real app, this would be a proper TOTP QR code)
-      const appName = "PetFeeder";
-      const email = currentUser.email || "user";
-      setQrCodeUrl(`https://chart.googleapis.com/chart?chs=200x200&chld=M|0&cht=qr&chl=otpauth://totp/${appName}:${email}%3Fsecret%3D${secret}%26issuer%3D${appName}`);
+      // Generate a QR code URL (using Google Chart API)
+      const appName = encodeURIComponent("PetFeeder");
+      const email = encodeURIComponent(currentUser.email || "user");
+      const secretEncoded = encodeURIComponent(secret);
+      const qrUrl = `https://chart.googleapis.com/chart?chs=200x200&chld=M|0&cht=qr&chl=otpauth://totp/${appName}:${email}%3Fsecret%3D${secretEncoded}%26issuer%3D${appName}`;
+      
+      console.log("Generated QR code URL:", qrUrl);
+      setQrCodeUrl(qrUrl);
     } catch (error) {
       console.error("Error generating 2FA secret:", error);
       toast({
@@ -438,7 +441,7 @@ const Settings = () => {
                   {soundEnabled ? <Volume2 className="h-5 w-5 text-gray-500" /> : <VolumeX className="h-5 w-5 text-gray-500" />}
                   <Label htmlFor="sound-toggle">Enable Sound Effects</Label>
                 </div>
-                <Switch
+                  <Switch
                   id="sound-toggle"
                   checked={soundEnabled}
                   onCheckedChange={handleSoundToggle}
@@ -479,11 +482,11 @@ const Settings = () => {
                   <Bell className="h-5 w-5 text-gray-500" />
                   <Label htmlFor="notification-toggle">Enable Push Notifications</Label>
                 </div>
-                <Switch
+                  <Switch
                   id="notification-toggle"
-                  checked={notificationsEnabled}
-                  onCheckedChange={handleNotificationToggle}
-                />
+                    checked={notificationsEnabled}
+                    onCheckedChange={handleNotificationToggle}
+                  />
               </div>
               <p className="text-sm text-gray-500">
                 When enabled, you will receive notifications about feeding events and device status.
@@ -557,16 +560,16 @@ const Settings = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-2">
                   <Mail className="h-5 w-5 text-gray-500" />
                   <Label htmlFor="email-notification-toggle">Enable Email Notifications</Label>
-                </div>
+                        </div>
                 <Switch
                   id="email-notification-toggle"
                   checked={emailNotifications}
                   onCheckedChange={handleEmailNotificationsToggle}
                 />
-              </div>
+                        </div>
               <p className="text-sm text-gray-500">
                 When enabled, you will receive email notifications for important events.
               </p>
@@ -574,23 +577,13 @@ const Settings = () => {
               {emailNotifications && (
                 <div className="mt-4">
                   <NotificationSettings />
-                </div>
+                      </div>
               )}
             </CardContent>
           </Card>
         </TabsContent>
         
         <TabsContent value="security" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Change Password</CardTitle>
-              <CardDescription>Update your account password</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ChangePasswordForm />
-            </CardContent>
-          </Card>
-          
           <Card>
             <CardHeader>
               <CardTitle>Two-Factor Authentication</CardTitle>
@@ -641,6 +634,8 @@ const Settings = () => {
                           src={qrCodeUrl} 
                           alt="QR Code for Two-Factor Authentication" 
                           className="border border-gray-200 rounded-md"
+                          width="200"
+                          height="200"
                         />
                       )}
                     </div>
@@ -710,6 +705,16 @@ const Settings = () => {
           
           <Card>
             <CardHeader>
+              <CardTitle>Change Password</CardTitle>
+              <CardDescription>Update your password to keep your account secure</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChangePasswordForm />
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
               <CardTitle>Session Management</CardTitle>
               <CardDescription>Manage your active sessions and devices</CardDescription>
             </CardHeader>
@@ -728,14 +733,14 @@ const Settings = () => {
                       <div className="flex items-center space-x-3">
                         <Smartphone className="h-5 w-5 text-gray-500" />
                         <div>
-                          <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-2">
                             <p className="text-sm font-medium">{session.deviceName}</p>
                             {session.isCurrent && (
                               <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
                                 Current
                               </span>
                             )}
-                          </div>
+                        </div>
                           <p className="text-xs text-gray-500">{session.browser} on {session.os}</p>
                           <p className="text-xs text-gray-500">Last active: {formatDate(session.lastActive)}</p>
                         </div>
@@ -752,7 +757,7 @@ const Settings = () => {
                           Revoke
                         </Button>
                       )}
-                    </div>
+                      </div>
                   ))}
                   
                   {sessions.length === 0 && (
@@ -844,7 +849,7 @@ const Settings = () => {
               </div>
             </CardContent>
           </Card>
-          
+        
           <Card>
             <CardHeader>
               <CardTitle>Feeding Schedule</CardTitle>
