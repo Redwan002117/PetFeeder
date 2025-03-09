@@ -299,6 +299,18 @@ const Settings = () => {
       const qrUrl = `https://chart.googleapis.com/chart?chs=200x200&chld=M|0&cht=qr&chl=otpauth://totp/${appName}:${email}%3Fsecret%3D${secretEncoded}%26issuer%3D${appName}`;
       
       console.log("Generated QR code URL:", qrUrl);
+      
+      // Test the QR code URL with a fetch to ensure it's valid
+      try {
+        const response = await fetch(qrUrl, { method: 'HEAD' });
+        if (!response.ok) {
+          throw new Error(`QR code URL returned status ${response.status}`);
+        }
+      } catch (fetchError) {
+        console.error("Error testing QR code URL:", fetchError);
+        // Continue anyway, as the URL might still work for img src
+      }
+      
       setQrCodeUrl(qrUrl);
     } catch (error) {
       console.error("Error generating 2FA secret:", error);
@@ -631,14 +643,27 @@ const Settings = () => {
                   
                   <div className="space-y-4 py-4">
                     <div className="flex justify-center">
-                      {qrCodeUrl && (
+                      {qrCodeUrl ? (
                         <img 
                           src={qrCodeUrl} 
                           alt="QR Code for Two-Factor Authentication" 
                           className="border border-gray-200 rounded-md"
                           width="200"
                           height="200"
+                          onError={(e) => {
+                            console.error("QR code image failed to load");
+                            e.currentTarget.style.display = 'none';
+                            toast({
+                              title: "QR Code Error",
+                              description: "Failed to load QR code. Please use the secret key instead.",
+                              variant: "destructive"
+                            });
+                          }}
                         />
+                      ) : (
+                        <div className="w-[200px] h-[200px] border border-gray-200 rounded-md flex items-center justify-center bg-gray-50">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                        </div>
                       )}
                     </div>
                     

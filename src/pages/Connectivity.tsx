@@ -204,7 +204,7 @@ const Connectivity = ({ standalone = true }: ConnectivityProps) => {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              <div className="flex justify-between items-center">
+              <div key="status" className="flex justify-between items-center">
                 <span className="text-sm font-medium">Status:</span>
                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${deviceStatus?.online ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                   {deviceStatus?.online ? 'Online' : 'Offline'}
@@ -248,7 +248,7 @@ const Connectivity = ({ standalone = true }: ConnectivityProps) => {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              <div className="flex justify-between items-center">
+              <div key="wifi-status" className="flex justify-between items-center">
                 <span className="text-sm font-medium">Status:</span>
                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${isConnected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                   {isConnected ? 'Connected' : 'Disconnected'}

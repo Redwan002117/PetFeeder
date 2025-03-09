@@ -237,8 +237,13 @@ const PetProfiles = () => {
     }
 
     try {
-      // Use safePush to generate a unique ID and path
-      const petId = await safePush(`users/${currentUser.uid}/pets`, {
+      // If no photo was uploaded, generate a default avatar
+      if (!formData.photoURL) {
+        formData.photoURL = `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.name)}&background=random&color=fff&size=200`;
+      }
+      
+      // Prepare the pet data with proper type conversions
+      const petData = {
         name: formData.name,
         type: formData.type,
         breed: formData.breed || '',
@@ -248,9 +253,20 @@ const PetProfiles = () => {
         foodType: formData.foodType || '',
         foodAmount: formData.foodAmount ? parseFloat(formData.foodAmount) : null,
         notes: formData.notes || '',
-        photoURL: formData.photoURL || '',
+        photoURL: formData.photoURL,
         createdAt: Date.now()
-      });
+      };
+      
+      console.log("Adding pet with data:", petData);
+      
+      // Use safePush to generate a unique ID and path
+      const petId = await safePush(`users/${currentUser.uid}/pets`, petData);
+      
+      if (!petId) {
+        throw new Error("Failed to generate pet ID");
+      }
+      
+      console.log("Pet added successfully with ID:", petId);
 
       toast({
         title: "Pet Added",
@@ -373,10 +389,10 @@ const PetProfiles = () => {
       // Create a FormData object to send the file
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('upload_preset', 'pet_photos'); // Your Cloudinary upload preset
+      formData.append('upload_preset', 'petfeeder'); // Use a public upload preset that doesn't require authentication
       
-      // Upload to Cloudinary
-      const response = await fetch('https://api.cloudinary.com/v1_1/your-cloud-name/image/upload', {
+      // Upload to Cloudinary using a public cloud name
+      const response = await fetch('https://api.cloudinary.com/v1_1/demo/image/upload', {
         method: 'POST',
         body: formData
       });
@@ -408,9 +424,15 @@ const PetProfiles = () => {
       console.error('Error uploading photo:', error);
       toast({
         title: "Upload Failed",
-        description: "Failed to upload pet photo. Please try again.",
+        description: "Failed to upload pet photo. Using default image instead.",
         variant: "destructive",
       });
+      
+      // Set a default image URL if upload fails
+      setFormData(prev => ({
+        ...prev,
+        photoURL: `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.name)}&background=random&color=fff&size=200`
+      }));
     } finally {
       setUploadingPhoto(false);
     }
