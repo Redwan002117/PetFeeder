@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { database, ref, get } from '@/lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, BarChart2, Users, Server, AlertTriangle } from "lucide-react";
+import { Loader2, BarChart2, Users, Server, AlertTriangle, PawPrint } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import PageHeader from "@/components/PageHeader";
 
 interface AnalyticsData {
   totalUsers: number;
@@ -221,69 +222,76 @@ export const Analytics: React.FC = () => {
     return (
       <div className="flex justify-center items-center h-64">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <span className="ml-2 text-lg">Loading analytics data...</span>
       </div>
     );
   }
   
   return (
     <div className="space-y-6">
+      <PageHeader 
+        title="Analytics Dashboard" 
+        icon={<BarChart2 size={28} />}
+        description="View system analytics and statistics"
+      />
+      
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Users</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center">
-              <Users className="h-5 w-5 text-primary mr-2" />
+              <Users className="h-5 w-5 text-muted-foreground mr-2" />
               <span className="text-2xl font-bold">{data.totalUsers}</span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {data.activeUsers} active in the last {timeRange === '24h' ? 'day' : timeRange === '7d' ? 'week' : timeRange === '30d' ? 'month' : '3 months'}
+              {data.activeUsers} active in last 24h
             </p>
           </CardContent>
         </Card>
         
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Devices</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Devices</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center">
-              <Server className="h-5 w-5 text-primary mr-2" />
+              <Server className="h-5 w-5 text-muted-foreground mr-2" />
               <span className="text-2xl font-bold">{data.totalDevices}</span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {data.activeDevices} active in the last {timeRange === '24h' ? 'day' : timeRange === '7d' ? 'week' : timeRange === '30d' ? 'month' : '3 months'}
+              {data.activeDevices} active in last 24h
             </p>
           </CardContent>
         </Card>
         
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Feedings</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Feedings</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center">
-              <BarChart2 className="h-5 w-5 text-primary mr-2" />
+              <PawPrint className="h-5 w-5 text-muted-foreground mr-2" />
               <span className="text-2xl font-bold">{data.totalFeedings}</span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              In the last {timeRange === '24h' ? 'day' : timeRange === '7d' ? 'week' : timeRange === '30d' ? 'month' : '3 months'}
+              Avg. food level: {data.averageFoodLevel}%
             </p>
           </CardContent>
         </Card>
         
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Device Issues</CardTitle>
+            <CardTitle className="text-sm font-medium">Device Issues</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center">
-              <AlertTriangle className="h-5 w-5 text-destructive mr-2" />
+              <AlertTriangle className="h-5 w-5 text-muted-foreground mr-2" />
               <span className="text-2xl font-bold">{data.deviceIssues}</span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Devices reporting errors or warnings
+              Requiring attention
             </p>
           </CardContent>
         </Card>

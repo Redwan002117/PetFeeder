@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { database, ref, get } from '@/lib/firebase';
+import { database, ref, get, query, orderByChild, limitToLast } from '@/lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Loader2, FileText, AlertCircle, Info, PawPrint } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Loader2, Search, AlertTriangle, Info, CheckCircle } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import PageHeader from "@/components/PageHeader";
 
 interface LogEntry {
   id: string;
@@ -14,74 +14,60 @@ interface LogEntry {
   level: 'info' | 'warning' | 'error';
   message: string;
   source: string;
-  userId?: string;
-  deviceId?: string;
   details?: string;
 }
 
 export const SystemLogs: React.FC = () => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [timeRange, setTimeRange] = useState<'24h' | '7d' | '30d'>('24h');
+  const [filter, setFilter] = useState<'all' | 'info' | 'warning' | 'error'>('all');
+  const [limit, setLimit] = useState(50);
   const { toast } = useToast();
 
   useEffect(() => {
     fetchLogs();
-  }, [timeRange]);
+  }, [filter, limit]);
 
   const fetchLogs = async () => {
     try {
       setLoading(true);
       
-      // Calculate time range
-      const now = new Date();
-      let startTime = new Date();
-      switch (timeRange) {
-        case '24h':
-          startTime.setDate(now.getDate() - 1);
-          break;
-        case '7d':
-          startTime.setDate(now.getDate() - 7);
-          break;
-        case '30d':
-          startTime.setDate(now.getDate() - 30);
-          break;
-      }
-      
-      // Fetch logs from Firebase Realtime Database
+      // Create a query to get the logs
       const logsRef = ref(database, 'logs');
-      const logsSnapshot = await get(logsRef);
-      
-      if (!logsSnapshot.exists()) {
-        setLogs([]);
-        setLoading(false);
-        return;
-      }
-      
-      const logsData = logsSnapshot.val();
-      
-      // Convert to array and filter by time range
-      const logsArray = Object.entries(logsData || {}).map(([id, data]: [string, any]) => ({
-        id,
-        ...data,
-        timestamp: data.timestamp || 0
-      }));
-      
-      // Filter logs by time range
-      const filteredLogs = logsArray.filter(log => 
-        log.timestamp >= startTime.getTime()
+      const logsQuery = query(
+        logsRef,
+        orderByChild('timestamp'),
+        limitToLast(limit)
       );
       
-      // Sort logs by timestamp (newest first)
-      filteredLogs.sort((a, b) => b.timestamp - a.timestamp);
+      const snapshot = await get(logsQuery);
       
-      setLogs(filteredLogs);
+      if (snapshot.exists()) {
+        const logsData = snapshot.val();
+        
+        // Convert the object to an array and sort by timestamp (newest first)
+        let logsArray = Object.keys(logsData).map(key => ({
+          id: key,
+          ...logsData[key]
+        })) as LogEntry[];
+        
+        // Sort by timestamp (newest first)
+        logsArray.sort((a, b) => b.timestamp - a.timestamp);
+        
+        // Apply filter if needed
+        if (filter !== 'all') {
+          logsArray = logsArray.filter(log => log.level === filter);
+        }
+        
+        setLogs(logsArray);
+      } else {
+        setLogs([]);
+      }
     } catch (error) {
       console.error('Error fetching logs:', error);
       toast({
         title: "Error",
-        description: "Failed to load system logs. Please try again later.",
+        description: "Failed to fetch system logs. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -89,149 +75,133 @@ export const SystemLogs: React.FC = () => {
     }
   };
 
-  // Filter logs based on search term
-  const filteredLogs = logs.filter(log => {
-    const searchTermLower = searchTerm.toLowerCase();
-    return (
-      log.message.toLowerCase().includes(searchTermLower) ||
-      log.source.toLowerCase().includes(searchTermLower) ||
-      (log.details && log.details.toLowerCase().includes(searchTermLower)) ||
-      (log.userId && log.userId.toLowerCase().includes(searchTermLower)) ||
-      (log.deviceId && log.deviceId.toLowerCase().includes(searchTermLower))
-    );
-  });
+  const getLevelIcon = (level: string) => {
+    switch (level) {
+      case 'info':
+        return <Info className="h-4 w-4 text-blue-500" />;
+      case 'warning':
+        return <AlertCircle className="h-4 w-4 text-amber-500" />;
+      case 'error':
+        return <AlertCircle className="h-4 w-4 text-red-500" />;
+      default:
+        return <Info className="h-4 w-4 text-gray-500" />;
+    }
+  };
 
   const getLevelBadge = (level: string) => {
     switch (level) {
-      case 'error':
-        return <Badge variant="destructive" className="flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Error</Badge>;
-      case 'warning':
-        return <Badge variant="secondary" className="flex items-center gap-1 bg-yellow-500 text-white"><AlertTriangle className="h-3 w-3" /> Warning</Badge>;
       case 'info':
+        return <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-300">Info</Badge>;
+      case 'warning':
+        return <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300">Warning</Badge>;
+      case 'error':
+        return <Badge variant="outline" className="bg-red-100 text-red-800 border-red-300">Error</Badge>;
       default:
-        return <Badge variant="outline" className="flex items-center gap-1"><Info className="h-3 w-3" /> Info</Badge>;
+        return <Badge variant="outline">Unknown</Badge>;
     }
   };
 
   const formatTimestamp = (timestamp: number) => {
-    return new Date(timestamp).toLocaleString();
+    const date = new Date(timestamp);
+    return date.toLocaleString();
   };
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="relative w-full md:w-64">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input
-            type="text"
-            placeholder="Search logs..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-8"
-          />
+      <PageHeader 
+        title="System Logs" 
+        icon={<FileText size={28} />}
+        description="View and analyze system logs and events"
+      />
+      
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div>
+            <label className="text-sm font-medium mb-1 block">Filter by Level</label>
+            <Select value={filter} onValueChange={(value: any) => setFilter(value)}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Select level" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Levels</SelectItem>
+                <SelectItem value="info">Info</SelectItem>
+                <SelectItem value="warning">Warning</SelectItem>
+                <SelectItem value="error">Error</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div>
+            <label className="text-sm font-medium mb-1 block">Limit</label>
+            <Select value={limit.toString()} onValueChange={(value) => setLimit(parseInt(value))}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Select limit" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="50">50 entries</SelectItem>
+                <SelectItem value="100">100 entries</SelectItem>
+                <SelectItem value="200">200 entries</SelectItem>
+                <SelectItem value="500">500 entries</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         
-        <div className="flex gap-2">
-          <Button
-            variant={timeRange === '24h' ? "default" : "outline"}
-            size="sm"
-            onClick={() => setTimeRange('24h')}
-          >
-            24h
-          </Button>
-          <Button
-            variant={timeRange === '7d' ? "default" : "outline"}
-            size="sm"
-            onClick={() => setTimeRange('7d')}
-          >
-            7d
-          </Button>
-          <Button
-            variant={timeRange === '30d' ? "default" : "outline"}
-            size="sm"
-            onClick={() => setTimeRange('30d')}
-          >
-            30d
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchLogs}
-          >
-            Refresh
-          </Button>
-        </div>
+        <Button onClick={fetchLogs} className="mt-4 sm:mt-0">
+          <PawPrint className="mr-2 h-4 w-4" />
+          Refresh Logs
+        </Button>
       </div>
       
-      <Card>
-        <CardHeader>
-          <CardTitle>System Logs</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {filteredLogs.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-500" />
-              <p>No logs found for the selected time period.</p>
-              <p className="text-sm mt-2">Try changing the time range or search criteria.</p>
-            </div>
-          ) : (
+      {loading ? (
+        <div className="flex justify-center items-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <span className="ml-2 text-lg">Loading logs...</span>
+        </div>
+      ) : logs.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center h-64">
+            <FileText className="h-12 w-12 text-gray-300 mb-4" />
+            <p className="text-lg font-medium text-gray-500">No logs found</p>
+            <p className="text-sm text-gray-400">Try changing your filters or increasing the limit</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>System Logs ({logs.length} entries)</CardTitle>
+          </CardHeader>
+          <CardContent>
             <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Time</TableHead>
-                    <TableHead>Level</TableHead>
-                    <TableHead>Source</TableHead>
-                    <TableHead className="w-full">Message</TableHead>
-                    <TableHead>User/Device</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredLogs.map((log) => (
-                    <TableRow key={log.id}>
-                      <TableCell className="whitespace-nowrap">
-                        {formatTimestamp(log.timestamp)}
-                      </TableCell>
-                      <TableCell>
-                        {getLevelBadge(log.level)}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        {log.source}
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          {log.message}
-                          {log.details && (
-                            <div className="text-xs text-muted-foreground mt-1 max-w-md overflow-hidden text-ellipsis">
-                              {log.details}
-                            </div>
-                          )}
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2 px-4 font-medium">Time</th>
+                    <th className="text-left py-2 px-4 font-medium">Level</th>
+                    <th className="text-left py-2 px-4 font-medium">Source</th>
+                    <th className="text-left py-2 px-4 font-medium">Message</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {logs.map((log) => (
+                    <tr key={log.id} className="border-b hover:bg-gray-50 dark:hover:bg-gray-800">
+                      <td className="py-2 px-4 text-sm">{formatTimestamp(log.timestamp)}</td>
+                      <td className="py-2 px-4">
+                        <div className="flex items-center">
+                          {getLevelIcon(log.level)}
+                          <span className="ml-2">{getLevelBadge(log.level)}</span>
                         </div>
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        {log.userId && (
-                          <div className="text-xs">User: {log.userId}</div>
-                        )}
-                        {log.deviceId && (
-                          <div className="text-xs">Device: {log.deviceId}</div>
-                        )}
-                      </TableCell>
-                    </TableRow>
+                      </td>
+                      <td className="py-2 px-4 text-sm">{log.source}</td>
+                      <td className="py-2 px-4 text-sm">{log.message}</td>
+                    </tr>
                   ))}
-                </TableBody>
-              </Table>
+                </tbody>
+              </table>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }; 

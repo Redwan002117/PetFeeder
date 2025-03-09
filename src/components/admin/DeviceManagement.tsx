@@ -1,17 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { database, ref, get, update, onValue, off, push } from '@/lib/firebase';
+import { database, ref, get, update, onValue, off, push, remove } from '@/lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Loader2, Search, Edit, Trash2, AlertTriangle, CheckCircle, Server, Plus, RefreshCw, Download, BarChart, Battery, Zap } from "lucide-react";
+import { Loader2, Search, Edit, Trash2, AlertTriangle, CheckCircle, Server, Plus, RefreshCw, Download, BarChart, Battery, Zap, Bot, PlusCircle } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import PageHeader from "@/components/PageHeader";
 
 interface Device {
   id: string;
@@ -25,6 +27,8 @@ interface Device {
   foodLevel: number;
   batteryLevel?: number;
   location?: string;
+  lastConnected: number;
+  owner: string;
 }
 
 interface DeviceStats {
@@ -57,6 +61,7 @@ export const DeviceManagement: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const devicesRef = useRef<any>(null);
   const { toast } = useToast();
+  const [deleteDeviceId, setDeleteDeviceId] = useState<string | null>(null);
 
   useEffect(() => {
     // Set up real-time listener for devices
@@ -75,7 +80,8 @@ export const DeviceManagement: React.FC = () => {
       const devicesArray = Object.entries(devicesData || {}).map(([id, data]: [string, any]) => ({
         id,
         ...data,
-        lastSeen: data.lastSeen || 0
+        lastSeen: data.lastSeen || 0,
+        lastConnected: data.lastConnected || 0
       }));
       
       // Sort devices by name
@@ -183,7 +189,7 @@ export const DeviceManagement: React.FC = () => {
     try {
       // Delete device from Firebase Realtime Database
       const deviceRef = ref(database, `devices/${deviceToDelete.id}`);
-      await update(deviceRef, null);
+      await remove(deviceRef);
       
       // Update local state
       setDevices(devices.filter(device => device.id !== deviceToDelete.id));
@@ -228,7 +234,9 @@ export const DeviceManagement: React.FC = () => {
         lastSeen: Date.now(),
         foodLevel: 100,
         batteryLevel: 100,
-        location: 'Default Location'
+        location: 'Default Location',
+        lastConnected: Date.now(),
+        owner: ''
       };
       
       await update(newDeviceRef, newDevice);
@@ -376,14 +384,14 @@ export const DeviceManagement: React.FC = () => {
       const devicesArray = Object.entries(devicesData || {}).map(([id, data]: [string, any]) => ({
         id,
         ...data,
-        lastSeen: data.lastSeen || 0
+        lastSeen: data.lastSeen || 0,
+        lastConnected: data.lastConnected || 0
       }));
       
       // Sort devices by name
       devicesArray.sort((a, b) => a.name.localeCompare(b.name));
       
       setDevices(devicesArray);
-      setLoading(false);
     } catch (error) {
       console.error('Error fetching devices:', error);
       toast({
@@ -393,6 +401,39 @@ export const DeviceManagement: React.FC = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleStatusChange = async (deviceId: string, newStatus: 'online' | 'offline' | 'maintenance') => {
+    try {
+      // Update the status in Firebase
+      const deviceRef = ref(database, `devices/${deviceId}`);
+      await update(deviceRef, {
+        status: newStatus
+      });
+      
+      // Update local state
+      setDevices(devices.map(device => {
+        if (device.id === deviceId) {
+          return {
+            ...device,
+            status: newStatus
+          };
+        }
+        return device;
+      }));
+      
+      toast({
+        title: "Status Updated",
+        description: `Device status has been updated to ${newStatus}.`,
+      });
+    } catch (error) {
+      console.error('Error updating status:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update status. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -406,6 +447,12 @@ export const DeviceManagement: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <PageHeader 
+        title="Device Management" 
+        icon={<Bot size={28} />}
+        description="Manage and monitor connected devices"
+      />
+      
       <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
         <div className="flex flex-col md:flex-row gap-4 items-center w-full">
           <div className="relative w-full md:w-64">
@@ -488,11 +535,11 @@ export const DeviceManagement: React.FC = () => {
                 <div>
                   <p className="text-sm font-medium text-gray-500">Last Seen</p>
                   <p>{formatLastSeen(selectedDevice.lastSeen)}</p>
-                    </div>
+                </div>
                 <div>
                   <p className="text-sm font-medium text-gray-500">Location</p>
                   <p>{selectedDevice.location || 'Not specified'}</p>
-                    </div>
+                </div>
               </CardContent>
             </Card>
             
@@ -507,7 +554,7 @@ export const DeviceManagement: React.FC = () => {
                     <p className="text-sm font-medium">{selectedDevice.foodLevel}%</p>
                   </div>
                   <Progress value={selectedDevice.foodLevel} className="h-2" />
-                  </div>
+                </div>
                 
                 {selectedDevice.batteryLevel !== undefined && (
                   <div>
@@ -803,7 +850,7 @@ export const DeviceManagement: React.FC = () => {
                 className="w-full min-h-[100px] p-2 border rounded-md"
               />
             </div>
-      </div>
+          </div>
           
           <DialogFooter>
             <Button variant="outline" onClick={() => setMaintenanceDialogOpen(false)}>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { database, ref, get, update } from '@/lib/firebase';
+import { database, ref, get, update, remove } from '@/lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Loader2, Search, Edit, Trash2, Shield, User, CheckCircle } from "lucide-react";
+import { Loader2, Search, Edit, Trash2, Shield, User, CheckCircle, Users, UserPlus, PawPrint } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import PageHeader from "@/components/PageHeader";
 
 interface UserData {
   id: string;
@@ -141,7 +143,7 @@ export const UserManagement: React.FC = () => {
     try {
       // Delete user from Firebase Realtime Database
       const userRef = ref(database, `users/${userToDelete.id}`);
-      await update(userRef, null);
+      await remove(userRef);
       
       // Update local state
       setUsers(users.filter(user => user.id !== userToDelete.id));
@@ -200,6 +202,12 @@ export const UserManagement: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <PageHeader 
+        title="User Management" 
+        icon={<Users size={28} />}
+        description="Manage users and their permissions"
+      />
+      
       <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
         <div className="relative w-full md:w-64">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -322,7 +330,7 @@ export const UserManagement: React.FC = () => {
                   onCheckedChange={(checked) => setEditPermissions({...editPermissions, canViewStats: checked})}
                 />
               </div>
-      </div>
+            </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setEditingUser(null)}>Cancel</Button>
               <Button onClick={handleSaveUser}>Save Changes</Button>
