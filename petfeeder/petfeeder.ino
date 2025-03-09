@@ -159,6 +159,9 @@ void loop() {
   // Handle manual feed button
   handleManualFeedButton();
   
+  // Always check WiFi status
+  checkWiFiStatus();
+  
   if (WiFi.status() == WL_CONNECTED && !isAPMode) {
     handleOnlineOperations();
   } else {
@@ -557,19 +560,51 @@ void handleOnlineOperations() {
   
   // Retry Firebase connection if needed
   if (!Firebase.ready() && (millis() - lastFirebaseRetry > FIREBASE_RETRY_INTERVAL)) {
+    Serial.println("Attempting to reconnect to Firebase...");
     setupFirebase();
     lastFirebaseRetry = millis();
   }
   
   if (Firebase.ready()) {
-    checkForManualFeedCommand();
-    checkSchedules();
-    
-    static unsigned long lastFoodLevelCheck = 0;
-    if (millis() - lastFoodLevelCheck > 60000) {
-      updateFoodLevel();
-      lastFoodLevelCheck = millis();
+    // Check for manual feed commands
+    try {
+      checkForManualFeedCommand();
+    } catch (const std::exception& e) {
+      Serial.print("Error checking for manual feed command: ");
+      Serial.println(e.what());
     }
+    
+    // Check feeding schedules
+    try {
+      checkSchedules();
+    } catch (const std::exception& e) {
+      Serial.print("Error checking schedules: ");
+      Serial.println(e.what());
+    }
+    
+    // Update food level periodically
+    static unsigned long lastFoodLevelCheck = 0;
+    if (millis() - lastFoodLevelCheck > 60000) { // Every minute
+      try {
+        updateFoodLevel();
+        lastFoodLevelCheck = millis();
+      } catch (const std::exception& e) {
+        Serial.print("Error updating food level: ");
+        Serial.println(e.what());
+      }
+    }
+    
+    // Periodically update device heartbeat
+    static unsigned long lastHeartbeat = 0;
+    if (millis() - lastHeartbeat > 300000) { // Every 5 minutes
+      String path = "/devices/" + deviceID + "/heartbeat";
+      if (Firebase.setInt(firebaseData, path, timeClient.getEpochTime())) {
+        Serial.println("Heartbeat updated");
+      }
+      lastHeartbeat = millis();
+    }
+  } else {
+    Serial.println("Firebase not ready. Will retry later.");
   }
 }
 
@@ -606,5 +641,59 @@ void handleManualFeed() {
 }
 
 void checkWiFiStatus() {
-  // Implementation of checkWiFiStatus function
+  static unsigned long lastWifiCheck = 0;
+  static unsigned long lastReconnectAttempt = 0;
+  static int reconnectAttempts = 0;
+  const int MAX_RECONNECT_ATTEMPTS = 5;
+  const unsigned long RECONNECT_INTERVAL = 10000; // 10 seconds between reconnect attempts
+  const unsigned long WIFI_CHECK_INTERVAL = 30000; // Check WiFi every 30 seconds
+  
+  unsigned long currentMillis = millis();
+  
+  // Check WiFi status periodically
+  if (currentMillis - lastWifiCheck >= WIFI_CHECK_INTERVAL) {
+    lastWifiCheck = currentMillis;
+    
+    if (WiFi.status() != WL_CONNECTED) {
+      // WiFi is disconnected
+      digitalWrite(LED_PIN, (millis() / 500) % 2); // Blink LED to indicate WiFi issue
+      
+      // Try to reconnect if enough time has passed since last attempt
+      if (currentMillis - lastReconnectAttempt >= RECONNECT_INTERVAL) {
+        lastReconnectAttempt = currentMillis;
+        
+        if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+          Serial.println("WiFi disconnected. Attempting to reconnect...");
+          WiFi.disconnect();
+          WiFi.begin(); // Attempt to reconnect with saved credentials
+          reconnectAttempts++;
+        } else {
+          Serial.println("Max reconnect attempts reached. Starting WiFi manager...");
+          // Reset reconnect attempts counter
+          reconnectAttempts = 0;
+          
+          // Start WiFi manager in AP mode
+          wm.setConfigPortalTimeout(180); // 3 minutes timeout
+          wm.startConfigPortal("PetFeeder-Setup");
+        }
+      }
+    } else {
+      // WiFi is connected, reset reconnect attempts
+      reconnectAttempts = 0;
+      
+      // Update device status in Firebase
+      if (Firebase.ready()) {
+        String path = "/devices/" + deviceID + "/status";
+        if (Firebase.setString(firebaseData, path, "online")) {
+          Serial.println("Device status updated to online");
+        }
+        
+        // Update last seen timestamp
+        path = "/devices/" + deviceID + "/lastSeen";
+        if (Firebase.setInt(firebaseData, path, timeClient.getEpochTime())) {
+          Serial.println("Last seen timestamp updated");
+        }
+      }
+    }
+  }
 }

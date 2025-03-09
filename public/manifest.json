@@ -1,28 +1,27 @@
 {
-  "name": "PetFeeder",
+  "name": "PetFeeder Hub",
   "short_name": "PetFeeder",
   "description": "Smart pet feeding solution - Control your pet feeder remotely, set feeding schedules, and monitor your pet's feeding habits.",
-  "start_url": "/",
+  "start_url": ".",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#4f46e5",
+  "theme_color": "#000000",
   "version": "1.0.0",
   "icons": [
     {
-      "src": "/favicon.ico",
-      "sizes": "64x64",
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
       "type": "image/x-icon"
     },
     {
-      "src": "/favicon.png",
-      "sizes": "192x192",
-      "type": "image/png"
+      "src": "logo192.png",
+      "type": "image/png",
+      "sizes": "192x192"
     },
     {
-      "src": "/og-image.png",
-      "sizes": "512x512",
+      "src": "logo512.png",
       "type": "image/png",
-      "purpose": "any maskable"
+      "sizes": "512x512"
     }
   ]
 } 

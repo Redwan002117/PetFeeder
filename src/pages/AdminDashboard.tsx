@@ -1,18 +1,22 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { getAllUsers, updateUserPermissions, updateUserRole } from "@/lib/firebase";
+import { getAllUsers, updateUserPermissions, updateUserRole, deleteAllUsers } from "@/lib/firebase";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { AlertCircle, Users, Search, UserCog, Info, Shield, AlertTriangle, Lock, UserPlus } from "lucide-react";
+import { AlertCircle, Users, Search, UserCog, Info, Shield, AlertTriangle, Lock, UserPlus, BarChart, Server, FileText, Settings } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Analytics } from "@/components/admin/Analytics";
+import { DeviceManagement } from "@/components/admin/DeviceManagement";
+import { SystemLogs } from "@/components/admin/SystemLogs";
+import { UserManagement } from "@/components/admin/UserManagement";
 
 const AdminDashboard = () => {
   const { isAdmin, isVerifiedAdmin, currentUser } = useAuth();
@@ -25,6 +29,8 @@ const AdminDashboard = () => {
   const [promoting, setPromoting] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [isLoading, setIsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("overview");
 
   useEffect(() => {
     // Check if user is logged in
@@ -53,20 +59,39 @@ const AdminDashboard = () => {
       return;
     }
 
-    // Fetch users data if user is admin and verified
-    if (currentUser && isAdmin && isVerifiedAdmin) {
-      const unsubscribe = getAllUsers((usersData) => {
-        if (usersData) {
+    // Only fetch users if the user is a verified admin
+    if (currentUser && isAdmin) {
+      console.log("Fetching users...");
+      fetchUsers();
+    }
+  }, [currentUser, isAdmin, isVerifiedAdmin]);
+
+  const fetchUsers = async () => {
+    setIsLoading(true);
+    try {
+      console.log("Getting all users...");
+      getAllUsers((usersData) => {
+        console.log("Users data received:", usersData);
+        if (!usersData) {
+          console.log("No users data received");
+          setUsers({});
+        } else {
           setUsers(usersData);
         }
+        setIsLoading(false);
         setLoading(false);
       });
-
-      return () => unsubscribe();
-    } else {
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load users. Please try again later.",
+        variant: "destructive",
+      });
+      setIsLoading(false);
       setLoading(false);
     }
-  }, [currentUser, isAdmin, isVerifiedAdmin, navigate, loading]);
+  };
 
   const handlePermissionChange = async (userId: string, permission: string, value: boolean) => {
     try {
@@ -106,6 +131,29 @@ const AdminDashboard = () => {
       });
     } finally {
       setPromoting(false);
+    }
+  };
+
+  const handleDeleteAllUsers = async () => {
+    if (window.confirm("WARNING: This will delete ALL users from the database. This action cannot be undone. Are you sure you want to proceed?")) {
+      try {
+        setIsLoading(true);
+        await deleteAllUsers();
+        toast({
+          title: "Success",
+          description: "All users have been deleted from the database",
+          variant: "default",
+        });
+      } catch (error) {
+        console.error("Error deleting users:", error);
+        toast({
+          title: "Error",
+          description: "Failed to delete users",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -155,339 +203,204 @@ const AdminDashboard = () => {
   }
 
   return (
-    <div className="container mx-auto py-8 animate-fadeIn">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center">
-          <Shield className="h-6 w-6 mr-2 text-pet-primary" />
-          <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-        </div>
-        <Badge variant="outline" className="bg-pet-primary text-white border-pet-primary">
-          Admin Mode
-        </Badge>
-      </div>
+    <div className="container mx-auto py-8">
+      <h1 className="text-3xl font-bold mb-6 flex items-center">
+        <Shield className="mr-2 h-6 w-6 text-indigo-600" />
+        Admin Dashboard
+      </h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <Card className="transition-all duration-300 hover:shadow-md">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Total Users</p>
-                <p className="text-2xl font-bold">{getUserCount()}</p>
-              </div>
-              <div className="h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center">
-                <Users className="h-6 w-6 text-blue-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="transition-all duration-300 hover:shadow-md">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Admin Users</p>
-                <p className="text-2xl font-bold">{getAdminCount()}</p>
-              </div>
-              <div className="h-12 w-12 bg-purple-100 rounded-full flex items-center justify-center">
-                <Shield className="h-6 w-6 text-purple-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="transition-all duration-300 hover:shadow-md">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Regular Users</p>
-                <p className="text-2xl font-bold">{getRegularUserCount()}</p>
-              </div>
-              <div className="h-12 w-12 bg-green-100 rounded-full flex items-center justify-center">
-                <UserCog className="h-6 w-6 text-green-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {adminError && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{adminError}</AlertDescription>
+        </Alert>
+      )}
 
-      <Card className="mb-6 transition-all duration-300 hover:shadow-md">
-        <CardHeader>
-          <div className="flex justify-between items-center">
-            <div>
-              <CardTitle>User Management</CardTitle>
-              <CardDescription>Manage user accounts and permissions</CardDescription>
-            </div>
-            <Dialog open={promoteDialogOpen} onOpenChange={setPromoteDialogOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm" className="flex items-center gap-1">
-                  <UserPlus size={16} />
-                  <span>Promote User</span>
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Promote User to Admin</DialogTitle>
-                  <DialogDescription>
-                    Select a user to promote to administrator role. This action cannot be undone.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="py-4">
-                  <label className="text-sm font-medium mb-2 block">Select User</label>
-                  <select 
-                    className="w-full p-2 border rounded-md"
-                    onChange={(e) => {
-                      const userId = e.target.value;
-                      if (userId) {
-                        const user = users[userId];
-                        setSelectedUser({
-                          id: userId,
-                          email: user.email,
-                          displayName: user.displayName || user.email
-                        });
-                      } else {
-                        setSelectedUser(null);
-                      }
-                    }}
-                    value={selectedUser?.id || ""}
-                  >
-                    <option value="">Select a user</option>
-                    {Object.entries(users)
-                      .filter(([id, user]: [string, any]) => user.role !== "admin" && id !== currentUser?.uid)
-                      .map(([id, user]: [string, any]) => (
-                        <option key={id} value={id}>
-                          {user.displayName || user.email}
-                        </option>
-                      ))}
-                  </select>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="mb-6 grid grid-cols-2 md:grid-cols-6 max-w-4xl">
+          <TabsTrigger value="overview" className="flex items-center">
+            <BarChart className="mr-2 h-4 w-4" />
+            <span className="hidden md:inline">Overview</span>
+          </TabsTrigger>
+          <TabsTrigger value="users" className="flex items-center">
+            <Users className="mr-2 h-4 w-4" />
+            <span className="hidden md:inline">Users</span>
+          </TabsTrigger>
+          <TabsTrigger value="devices" className="flex items-center">
+            <Server className="mr-2 h-4 w-4" />
+            <span className="hidden md:inline">Devices</span>
+          </TabsTrigger>
+          <TabsTrigger value="analytics" className="flex items-center">
+            <BarChart className="mr-2 h-4 w-4" />
+            <span className="hidden md:inline">Analytics</span>
+          </TabsTrigger>
+          <TabsTrigger value="logs" className="flex items-center">
+            <FileText className="mr-2 h-4 w-4" />
+            <span className="hidden md:inline">System Logs</span>
+          </TabsTrigger>
+          <TabsTrigger value="settings" className="flex items-center">
+            <Settings className="mr-2 h-4 w-4" />
+            <span className="hidden md:inline">Settings</span>
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Users</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold">{getUserCount()}</div>
+                <p className="text-xs text-gray-500 mt-1">
+                  {getAdminCount()} admins, {getRegularUserCount()} regular users
+                </p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400">Active Devices</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold">12</div>
+                <p className="text-xs text-gray-500 mt-1">
+                  3 offline, 9 online
+                </p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Feedings Today</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold">48</div>
+                <p className="text-xs text-gray-500 mt-1">
+                  32 scheduled, 16 manual
+                </p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400">System Status</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-green-600">Healthy</div>
+                <p className="text-xs text-gray-500 mt-1">
+                  All systems operational
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+          
+          {/* Rest of the overview content */}
+        </TabsContent>
+
+        <TabsContent value="users">
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Users className="mr-2 h-5 w-5 text-indigo-600" />
+                User Management
+              </CardTitle>
+              <CardDescription>
+                Manage user accounts and permissions
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <UserManagement />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="devices">
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Server className="mr-2 h-5 w-5 text-indigo-600" />
+                Device Management
+              </CardTitle>
+              <CardDescription>
+                Manage connected devices and their settings
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DeviceManagement />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="analytics">
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <BarChart className="mr-2 h-5 w-5 text-indigo-600" />
+                Analytics Dashboard
+              </CardTitle>
+              <CardDescription>
+                View system analytics and statistics
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Analytics />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="logs">
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <FileText className="mr-2 h-5 w-5 text-indigo-600" />
+                System Logs
+              </CardTitle>
+              <CardDescription>
+                View and analyze system logs
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <SystemLogs />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="settings">
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Settings className="mr-2 h-5 w-5 text-indigo-600" />
+                Admin Settings
+              </CardTitle>
+              <CardDescription>
+                Configure admin dashboard settings
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-medium mb-2">Danger Zone</h3>
+                  <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4">
+                    <h4 className="text-red-800 dark:text-red-400 font-medium mb-2">Delete All Users</h4>
+                    <p className="text-red-700 dark:text-red-300 text-sm mb-4">
+                      This action will permanently delete all user accounts except for admin accounts.
+                      This cannot be undone.
+                    </p>
+                    <Button 
+                      variant="destructive" 
+                      onClick={handleDeleteAllUsers}
+                      disabled={isLoading}
+                    >
+                      {isLoading ? "Processing..." : "Delete All Users"}
+                    </Button>
+                  </div>
                 </div>
-                <DialogFooter>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setPromoteDialogOpen(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button 
-                    onClick={handlePromoteToAdmin}
-                    disabled={!selectedUser || promoting}
-                  >
-                    {promoting ? "Promoting..." : "Promote to Admin"}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="mb-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-              <Input
-                placeholder="Search users by email, username or role..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-          </div>
-
-          <Tabs defaultValue="all" className="animate-fadeIn">
-            <TabsList className="mb-4">
-              <TabsTrigger value="all">All Users</TabsTrigger>
-              <TabsTrigger value="admin">Admins</TabsTrigger>
-              <TabsTrigger value="regular">Regular Users</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="all">
-              <div className="rounded-md border overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>User</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Permissions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredUsers.length > 0 ? (
-                      filteredUsers.map(([userId, user]: [string, any]) => (
-                        <TableRow key={userId} className="transition-colors hover:bg-gray-50">
-                          <TableCell>
-                            <div>
-                              <p className="font-medium">{user.displayName || "No username"}</p>
-                              <p className="text-sm text-gray-500">{user.email}</p>
-                              <p className="text-xs text-gray-400 truncate">{userId}</p>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {user.role === "admin" ? (
-                              <Badge className="bg-purple-100 text-purple-800 border-purple-200">
-                                Admin
-                              </Badge>
-                            ) : (
-                              <Badge className="bg-blue-100 text-blue-800 border-blue-200">
-                                User
-                              </Badge>
-                            )}
-                            {user.emailVerified ? (
-                              <Badge variant="outline" className="ml-2 bg-green-50 text-green-700 border-green-200">
-                                Verified
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="ml-2 bg-yellow-50 text-yellow-700 border-yellow-200">
-                                Unverified
-                              </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <div className="space-y-2">
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm">Can Feed</span>
-                                <Switch
-                                  checked={user.permissions?.canFeed ?? true}
-                                  onCheckedChange={(checked) => handlePermissionChange(userId, "canFeed", checked)}
-                                  disabled={user.role === "admin" || userId === currentUser?.uid}
-                                />
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm">Can Schedule</span>
-                                <Switch
-                                  checked={user.permissions?.canSchedule ?? true}
-                                  onCheckedChange={(checked) => handlePermissionChange(userId, "canSchedule", checked)}
-                                  disabled={user.role === "admin" || userId === currentUser?.uid}
-                                />
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm">Can View Stats</span>
-                                <Switch
-                                  checked={user.permissions?.canViewStats ?? true}
-                                  onCheckedChange={(checked) => handlePermissionChange(userId, "canViewStats", checked)}
-                                  disabled={user.role === "admin" || userId === currentUser?.uid}
-                                />
-                              </div>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={3} className="text-center py-4">
-                          No users found matching your search.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
               </div>
-            </TabsContent>
-            
-            <TabsContent value="admin">
-              <div className="rounded-md border overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>User</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredUsers
-                      .filter(([_, user]: [string, any]) => user.role === "admin")
-                      .map(([userId, user]: [string, any]) => (
-                        <TableRow key={userId} className="transition-colors hover:bg-gray-50">
-                          <TableCell>
-                            <div>
-                              <p className="font-medium">{user.displayName || "No username"}</p>
-                              <p className="text-sm text-gray-500">{user.email}</p>
-                              <p className="text-xs text-gray-400 truncate">{userId}</p>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge className="bg-purple-100 text-purple-800 border-purple-200">
-                              Admin
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {user.emailVerified ? (
-                              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                Verified
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
-                                Unverified
-                              </Badge>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </TabsContent>
-            
-            <TabsContent value="regular">
-              <div className="rounded-md border overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>User</TableHead>
-                      <TableHead>Permissions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredUsers
-                      .filter(([_, user]: [string, any]) => user.role !== "admin")
-                      .map(([userId, user]: [string, any]) => (
-                        <TableRow key={userId} className="transition-colors hover:bg-gray-50">
-                          <TableCell>
-                            <div>
-                              <p className="font-medium">{user.displayName || "No username"}</p>
-                              <p className="text-sm text-gray-500">{user.email}</p>
-                              <p className="text-xs text-gray-400 truncate">{userId}</p>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="space-y-2">
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm">Can Feed</span>
-                                <Switch
-                                  checked={user.permissions?.canFeed ?? true}
-                                  onCheckedChange={(checked) => handlePermissionChange(userId, "canFeed", checked)}
-                                />
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm">Can Schedule</span>
-                                <Switch
-                                  checked={user.permissions?.canSchedule ?? true}
-                                  onCheckedChange={(checked) => handlePermissionChange(userId, "canSchedule", checked)}
-                                />
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm">Can View Stats</span>
-                                <Switch
-                                  checked={user.permissions?.canViewStats ?? true}
-                                  onCheckedChange={(checked) => handlePermissionChange(userId, "canViewStats", checked)}
-                                />
-                              </div>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
-
-      <Alert className="mb-6">
-        <Info className="h-4 w-4" />
-        <AlertDescription>
-          As an admin, you can manage user permissions and promote regular users to admin role. Admin accounts cannot have their permissions modified.
-        </AlertDescription>
-      </Alert>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

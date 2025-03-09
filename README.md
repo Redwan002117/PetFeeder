@@ -1,225 +1,134 @@
-# Auto Cat Feeder
+# PetFeeder Hub
 
-A web application for controlling and monitoring your pet feeder remotely. Built with React, TypeScript, and Firebase.
+A modern web application for managing smart pet feeders. Control feeding schedules, monitor food levels, and manage multiple devices from anywhere.
 
 ## Features
 
-- User authentication and authorization
-- Feeding schedule management
-- Manual feeding control
-- Feeding history and statistics
-- Device connectivity management
-- Push notifications for feeding events
-- Responsive design for mobile and desktop
-- User profile management
+- 🔐 Secure Authentication
+- 📱 Responsive Design
+- 📊 Real-time Monitoring
+- ⏰ Feeding Schedules
+- 📈 Analytics Dashboard
+- 👥 User Management
+- 🤖 Device Management
+- 📝 System Logs
+
+## Tech Stack
+
+- React 18
+- TypeScript
+- Vite
+- Firebase
+- TailwindCSS
+- React Router
+- React Hot Toast
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js (v14 or higher)
-- npm or yarn
+- Node.js 18+
+- npm 8+
+- Firebase account
 
 ### Installation
 
-1. Clone the repository
-2. Install dependencies:
-   ```
-   npm install
-   ```
-3. Start the development server:
-   ```
-   npm run dev
-   ```
-
-### Firebase Storage CORS Configuration
-
-If you're experiencing CORS issues with Firebase Storage (especially when uploading or retrieving profile pictures), you need to configure CORS for your Firebase Storage bucket.
-
-See the [Firebase CORS Setup Guide](./FIREBASE_CORS_SETUP.md) for detailed instructions.
-
-## Building for Production
-
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/petfeeder-hub.git
+cd petfeeder-hub
 ```
+
+2. Install dependencies:
+```bash
+npm install
+```
+
+3. Create environment files:
+   - Copy `.env.example` to `.env.development` and `.env.production`
+   - Fill in your Firebase credentials
+
+4. Start development server:
+```bash
+npm run dev
+```
+
+### Building for Production
+
+1. Build the application:
+```bash
 npm run build
 ```
 
-## Deployment Options
-
-You can deploy this application using various hosting services. This project is specifically configured for GitHub Pages and Netlify.
-
-### GitHub Pages Deployment
-
-1. **Update the homepage in package.json**:
-   
-   Edit the `homepage` field in `package.json` to match your GitHub username and repository name:
-   ```json
-   "homepage": "https://yourusername.github.io/petfeeder-hub"
-   ```
-
-2. **Deploy to GitHub Pages**:
-   ```bash
-   npm run deploy
-   ```
-
-   This will build your application and push it to the `gh-pages` branch of your repository.
-
-3. **Configure GitHub Pages**:
-   - Go to your repository on GitHub
-   - Navigate to Settings > Pages
-   - Select the `gh-pages` branch as the source
-   - Click Save
-
-4. **Access your deployed application**:
-   Your application will be available at `https://yourusername.github.io/petfeeder-hub`
-
-### Netlify Deployment
-
-1. **Create a Netlify account** if you don't have one: [Netlify Sign Up](https://app.netlify.com/signup)
-
-2. **Deploy via Netlify CLI**:
-   ```bash
-   # Install Netlify CLI
-   npm install -g netlify-cli
-   
-   # Login to Netlify
-   netlify login
-   
-   # Initialize Netlify in your project
-   netlify init
-   
-   # Deploy to Netlify
-   netlify deploy --prod
-   ```
-
-3. **Deploy via Netlify UI**:
-   - Go to [Netlify](https://app.netlify.com/)
-   - Click "New site from Git"
-   - Select your Git provider (GitHub, GitLab, or Bitbucket)
-   - Authorize Netlify to access your repositories
-   - Select your repository
-   - Configure build settings:
-     - Build command: `npm run build`
-     - Publish directory: `dist`
-   - Click "Deploy site"
-
-4. **Access your deployed application**:
-   Netlify will provide you with a URL like `https://your-site-name.netlify.app`
-
-## Firebase Database Paths for Arduino ESP32 Integration
-
-The application uses Firebase Realtime Database for storing and retrieving data. Here are the key database paths that your Arduino ESP32 device should interact with:
-
-### Device Status
-
-```
-/users/{userId}/deviceStatus
+2. Preview the build:
+```bash
+npm run preview
 ```
 
-The device should update this path with its current status:
+### Deployment
 
-```json
-{
-  "online": true,
-  "lastSeen": timestamp,
-  "foodLevel": 75, // percentage
-  "batteryLevel": 90, // percentage
-  "firmwareVersion": "1.0.0"
-}
+The application can be deployed to Firebase Hosting:
+
+1. Install Firebase CLI:
+```bash
+npm install -g firebase-tools
 ```
 
-### Feeding Schedule
-
-```
-/users/{userId}/feedingSchedule
-```
-
-The device should read this path to get the feeding schedule:
-
-```json
-{
-  "schedule1": {
-    "time": "08:00",
-    "amount": 25,
-    "enabled": true,
-    "days": {
-      "monday": true,
-      "tuesday": true,
-      "wednesday": true,
-      "thursday": true,
-      "friday": true,
-      "saturday": true,
-      "sunday": true
-    }
-  },
-  "schedule2": {
-    // Another schedule
-  }
-}
+2. Login to Firebase:
+```bash
+firebase login
 ```
 
-### Manual Feeding
-
-```
-/users/{userId}/manualFeed
-```
-
-The device should listen for changes on this path to trigger manual feeding:
-
-```json
-{
-  "timestamp": timestamp,
-  "amount": 20,
-  "status": "pending" // The device should update this to "completed" or "failed"
-}
+3. Initialize Firebase:
+```bash
+firebase init
 ```
 
-### Feeding History
-
-```
-/users/{userId}/feedingHistory
-```
-
-The device should write to this path after each feeding event:
-
-```json
-{
-  "feeding1": {
-    "timestamp": timestamp,
-    "amount": 25,
-    "type": "scheduled", // or "manual"
-    "success": true
-  }
-}
+4. Deploy:
+```bash
+npm run deploy
 ```
 
-### WiFi Credentials
+## Development
+
+### Available Scripts
+
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run preview` - Preview production build
+- `npm run lint` - Run ESLint
+- `npm run format` - Format code with Prettier
+- `npm run test` - Run tests
+- `npm run validate` - Run type checking, linting, and tests
+- `npm run analyze` - Analyze bundle size
+
+### Project Structure
 
 ```
-/users/{userId}/wifiCredentials
+src/
+├── components/     # Reusable components
+│   ├── admin/     # Admin-specific components
+│   ├── layout/    # Layout components
+│   └── ui/        # UI components
+├── contexts/      # React contexts
+├── hooks/         # Custom hooks
+├── lib/          # Utility functions
+├── pages/        # Page components
+└── types/        # TypeScript types
 ```
 
-The device can read this path to get WiFi credentials for connecting to a new network:
+### Contributing
 
-```json
-{
-  "ssid": "NetworkName",
-  "password": "NetworkPassword",
-  "timestamp": timestamp
-}
-```
-
-## Security Considerations
-
-- The ESP32 device should use Firebase Authentication to securely access the database
-- Use Firebase Security Rules to restrict access to user data
-- Store sensitive information like WiFi passwords securely
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Contact
+## Support
 
-Developer: [@GamerNo002117](https://redwancodes.com)
-Email: GamerNo002117@redwancodes.com
+For support, email support@petfeeder.com or join our Slack channel.

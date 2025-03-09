@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Accordion,
   AccordionContent,
@@ -6,8 +6,20 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Menu, Shield, Users, Settings, Database, Server, AlertTriangle } from "lucide-react";
 
 export function AdminGuide() {
+  const [activeSection, setActiveSection] = useState<string | null>(null);
+
+  const scrollToSection = (sectionId: string) => {
+    setActiveSection(sectionId);
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Alert>
@@ -17,8 +29,66 @@ export function AdminGuide() {
         </AlertDescription>
       </Alert>
 
+      {/* Table of Contents */}
+      <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg mb-6">
+        <div className="flex items-center mb-2">
+          <Menu className="mr-2 h-5 w-5" />
+          <h3 className="text-lg font-semibold">Table of Contents</h3>
+        </div>
+        <nav className="space-y-1">
+          <Button 
+            variant="ghost" 
+            className={`w-full justify-start ${activeSection === 'admin-access' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => scrollToSection('admin-access')}
+          >
+            <Shield className="mr-2 h-4 w-4" />
+            Admin Access
+          </Button>
+          <Button 
+            variant="ghost" 
+            className={`w-full justify-start ${activeSection === 'dashboard' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => scrollToSection('dashboard')}
+          >
+            <Server className="mr-2 h-4 w-4" />
+            Admin Dashboard
+          </Button>
+          <Button 
+            variant="ghost" 
+            className={`w-full justify-start ${activeSection === 'user-management' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => scrollToSection('user-management')}
+          >
+            <Users className="mr-2 h-4 w-4" />
+            User Management
+          </Button>
+          <Button 
+            variant="ghost" 
+            className={`w-full justify-start ${activeSection === 'device-management' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => scrollToSection('device-management')}
+          >
+            <Settings className="mr-2 h-4 w-4" />
+            Device Management
+          </Button>
+          <Button 
+            variant="ghost" 
+            className={`w-full justify-start ${activeSection === 'system-logs' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => scrollToSection('system-logs')}
+          >
+            <Database className="mr-2 h-4 w-4" />
+            System Logs
+          </Button>
+          <Button 
+            variant="ghost" 
+            className={`w-full justify-start ${activeSection === 'troubleshooting' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => scrollToSection('troubleshooting')}
+          >
+            <AlertTriangle className="mr-2 h-4 w-4" />
+            Troubleshooting
+          </Button>
+        </nav>
+      </div>
+
       <Accordion type="single" collapsible className="w-full">
-        <AccordionItem value="admin-access">
+        <AccordionItem value="admin-access" id="admin-access">
           <AccordionTrigger>Admin Access</AccordionTrigger>
           <AccordionContent>
             <div className="space-y-4">
@@ -40,7 +110,7 @@ export function AdminGuide() {
           </AccordionContent>
         </AccordionItem>
 
-        <AccordionItem value="dashboard">
+        <AccordionItem value="dashboard" id="dashboard">
           <AccordionTrigger>Admin Dashboard</AccordionTrigger>
           <AccordionContent>
             <div className="space-y-4">
@@ -63,7 +133,7 @@ export function AdminGuide() {
           </AccordionContent>
         </AccordionItem>
 
-        <AccordionItem value="user-management">
+        <AccordionItem value="user-management" id="user-management">
           <AccordionTrigger>User Management</AccordionTrigger>
           <AccordionContent>
             <div className="space-y-4">
@@ -86,7 +156,7 @@ export function AdminGuide() {
           </AccordionContent>
         </AccordionItem>
 
-        <AccordionItem value="device-management">
+        <AccordionItem value="device-management" id="device-management">
           <AccordionTrigger>Device Management</AccordionTrigger>
           <AccordionContent>
             <div className="space-y-4">
@@ -109,7 +179,7 @@ export function AdminGuide() {
           </AccordionContent>
         </AccordionItem>
 
-        <AccordionItem value="system-logs">
+        <AccordionItem value="system-logs" id="system-logs">
           <AccordionTrigger>System Logs</AccordionTrigger>
           <AccordionContent>
             <div className="space-y-4">

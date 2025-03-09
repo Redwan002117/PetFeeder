@@ -29,27 +29,29 @@ interface DeviceContextType {
 
 const DeviceContext = createContext<DeviceContextType | undefined>(undefined);
 
-export const useDevice = () => {
+export function useDevice() {
   const context = useContext(DeviceContext);
   if (context === undefined) {
     throw new Error('useDevice must be used within a DeviceProvider');
   }
   return context;
-};
+}
 
-export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export function DeviceProvider({ children }: { children: React.ReactNode }) {
   const [device, setDevice] = useState<DeviceData | null>(null);
   const [loading, setLoading] = useState(true);
-  const { currentUser } = useAuth();
+  const { currentUser, userData } = useAuth();
   const { toast } = useToast();
 
   useEffect(() => {
-    if (!currentUser?.deviceId) {
+    const deviceId = userData?.deviceId || '';
+    
+    if (!deviceId) {
       setLoading(false);
       return;
     }
 
-    const deviceRef = ref(db, `devices/${currentUser.deviceId}`);
+    const deviceRef = ref(db, `devices/${deviceId}`);
     onValue(deviceRef, (snapshot) => {
       if (snapshot.exists()) {
         setDevice(snapshot.val());
@@ -74,13 +76,14 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => {
       off(deviceRef);
     };
-  }, [currentUser?.deviceId]);
+  }, [currentUser, userData]);
 
   const updateWiFiConfig = async (config: DeviceData['wifiConfig']) => {
-    if (!currentUser?.deviceId || !device) return;
+    const deviceId = userData?.deviceId || '';
+    if (!deviceId || !device) return;
 
     try {
-      const configRef = ref(db, `devices/${currentUser.deviceId}/wifiConfig`);
+      const configRef = ref(db, `devices/${deviceId}/wifiConfig`);
       await set(configRef, config);
       toast({
         title: "Success",
@@ -98,10 +101,11 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const updateDeviceName = async (name: string) => {
-    if (!currentUser?.deviceId || !device) return;
+    const deviceId = userData?.deviceId || '';
+    if (!deviceId || !device) return;
 
     try {
-      const nameRef = ref(db, `devices/${currentUser.deviceId}/name`);
+      const nameRef = ref(db, `devices/${deviceId}/name`);
       await set(nameRef, name);
       toast({
         title: "Success",
@@ -119,10 +123,11 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const triggerFeed = async (amount: number) => {
-    if (!currentUser?.deviceId || !device) return;
+    const deviceId = userData?.deviceId || '';
+    if (!deviceId || !device) return;
 
     try {
-      const feedRef = ref(db, `devices/${currentUser.deviceId}/feedCommand`);
+      const feedRef = ref(db, `devices/${deviceId}/feedCommand`);
       await set(feedRef, {
         pending: true,
         amount,
@@ -156,4 +161,4 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       {children}
     </DeviceContext.Provider>
   );
-}; 
+} 

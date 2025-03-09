@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Accordion,
   AccordionContent,
@@ -6,8 +6,20 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Menu, Lock, Database, Server, Code, FileJson, Webhook } from "lucide-react";
 
 export function APIGuide() {
+  const [activeSection, setActiveSection] = useState<string | null>(null);
+
+  const scrollToSection = (sectionId: string) => {
+    setActiveSection(sectionId);
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Alert>
@@ -16,8 +28,66 @@ export function APIGuide() {
         </AlertDescription>
       </Alert>
 
+      {/* Table of Contents */}
+      <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg mb-6">
+        <div className="flex items-center mb-2">
+          <Menu className="mr-2 h-5 w-5" />
+          <h3 className="text-lg font-semibold">Table of Contents</h3>
+        </div>
+        <nav className="space-y-1">
+          <Button 
+            variant="ghost" 
+            className={`w-full justify-start ${activeSection === 'authentication' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => scrollToSection('authentication')}
+          >
+            <Lock className="mr-2 h-4 w-4" />
+            Authentication
+          </Button>
+          <Button 
+            variant="ghost" 
+            className={`w-full justify-start ${activeSection === 'devices' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => scrollToSection('devices')}
+          >
+            <Server className="mr-2 h-4 w-4" />
+            Device Endpoints
+          </Button>
+          <Button 
+            variant="ghost" 
+            className={`w-full justify-start ${activeSection === 'feeding' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => scrollToSection('feeding')}
+          >
+            <Database className="mr-2 h-4 w-4" />
+            Feeding Endpoints
+          </Button>
+          <Button 
+            variant="ghost" 
+            className={`w-full justify-start ${activeSection === 'schedules' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => scrollToSection('schedules')}
+          >
+            <FileJson className="mr-2 h-4 w-4" />
+            Schedule Endpoints
+          </Button>
+          <Button 
+            variant="ghost" 
+            className={`w-full justify-start ${activeSection === 'webhooks' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => scrollToSection('webhooks')}
+          >
+            <Webhook className="mr-2 h-4 w-4" />
+            Webhooks
+          </Button>
+          <Button 
+            variant="ghost" 
+            className={`w-full justify-start ${activeSection === 'sdk' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => scrollToSection('sdk')}
+          >
+            <Code className="mr-2 h-4 w-4" />
+            SDK Integration
+          </Button>
+        </nav>
+      </div>
+
       <Accordion type="single" collapsible className="w-full">
-        <AccordionItem value="authentication">
+        <AccordionItem value="authentication" id="authentication">
           <AccordionTrigger>Authentication</AccordionTrigger>
           <AccordionContent>
             <div className="space-y-4">

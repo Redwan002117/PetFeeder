@@ -1,8 +1,6 @@
-import { Cloudinary } from 'cloudinary-core';
+// Simplified Cloudinary implementation without external dependencies
 
 // Configure Cloudinary
-// Note: You should replace these with your actual Cloudinary credentials
-// and ideally store them in environment variables
 const cloudinaryConfig = {
   cloud_name: 'dgiip1hjs', // Replace with your cloud name
   api_key: '661465737781545',       // Replace with your API key
@@ -10,8 +8,40 @@ const cloudinaryConfig = {
   secure: true                   // Use HTTPS
 };
 
+// Simple Cloudinary class implementation
+class CloudinaryService {
+  private cloudName: string;
+  private apiKey: string;
+  private secure: boolean;
+
+  constructor(config: { cloud_name: string; api_key: string; secure: boolean }) {
+    this.cloudName = config.cloud_name;
+    this.apiKey = config.api_key;
+    this.secure = config.secure;
+  }
+
+  url(publicId: string, options: any = {}) {
+    const protocol = this.secure ? 'https' : 'http';
+    const transformations = this.buildTransformations(options);
+    return `${protocol}://res.cloudinary.com/${this.cloudName}/image/upload${transformations}/${publicId}`;
+  }
+
+  private buildTransformations(options: any) {
+    const transformations = [];
+    
+    if (options.width) transformations.push(`w_${options.width}`);
+    if (options.height) transformations.push(`h_${options.height}`);
+    if (options.crop) transformations.push(`c_${options.crop}`);
+    if (options.gravity) transformations.push(`g_${options.gravity}`);
+    if (options.fetch_format) transformations.push(`f_${options.fetch_format}`);
+    if (options.quality) transformations.push(`q_${options.quality}`);
+    
+    return transformations.length > 0 ? `/${transformations.join(',')}` : '';
+  }
+}
+
 // Create and export the Cloudinary instance
-export const cloudinary = new Cloudinary({
+export const cloudinary = new CloudinaryService({
   cloud_name: cloudinaryConfig.cloud_name,
   api_key: cloudinaryConfig.api_key,
   secure: cloudinaryConfig.secure

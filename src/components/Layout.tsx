@@ -13,11 +13,21 @@ import {
   User as UserIcon,
   Menu,
   Shield,
-  Settings
+  Settings,
+  FileText,
+  HandPlatter
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import ProfileAvatar from "@/components/ProfileAvatar";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import ThemeToggle from "@/components/ThemeToggle";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface SidebarItemProps {
   icon: React.ReactNode;
@@ -34,6 +44,11 @@ interface NavigationItem {
   hidden?: boolean;
 }
 
+interface NavigationCategory {
+  title: string;
+  items: NavigationItem[];
+}
+
 interface ExtendedUser extends User {
   deviceId?: string;
 }
@@ -45,13 +60,27 @@ const SidebarItem: React.FC<SidebarItemProps> = ({ icon, text, to, active, onCli
       className={`flex items-center py-3 px-4 rounded-md transition-colors ${
         active
           ? "bg-pet-primary text-white"
-          : "text-gray-600 hover:bg-gray-100"
+          : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
       }`}
       onClick={onClick}
     >
       <div className="mr-3">{icon}</div>
       <span>{text}</span>
     </Link>
+  );
+};
+
+const SidebarCategory: React.FC<{
+  title: string;
+  children: React.ReactNode;
+}> = ({ title, children }) => {
+  return (
+    <div className="mb-4">
+      <div className="px-4 mb-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+        {title}
+      </div>
+      <div className="space-y-1">{children}</div>
+    </div>
   );
 };
 
@@ -62,6 +91,19 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [open, setOpen] = React.useState(false);
   const user = currentUser as ExtendedUser;
 
+  // Function to check if a route is active
+  const isRouteActive = (path: string) => {
+    // Exact match for home page
+    if (path === '/' && location.pathname === '/') {
+      return true;
+    }
+    // For other pages, check if the pathname starts with the path (for nested routes)
+    if (path !== '/' && location.pathname.startsWith(path)) {
+      return true;
+    }
+    return false;
+  };
+
   const handleLogout = async () => {
     try {
       await logout();
@@ -71,167 +113,228 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     }
   };
 
-  // Regular user navigation items
-  const regularItems: NavigationItem[] = [
+  // Define navigation categories
+  const navigationCategories: NavigationCategory[] = [
     {
-      icon: <LayoutDashboard size={20} />,
-      text: "Dashboard",
-      to: "/",
+      title: "Main",
+      items: [
+        {
+          icon: <LayoutDashboard size={20} />,
+          text: "Home",
+          to: "/",
+        },
+        {
+          icon: <LayoutDashboard size={20} />,
+          text: "Dashboard",
+          to: "/dashboard",
+        },
+      ],
     },
     {
-      icon: <Calendar size={20} />,
-      text: "Schedule",
-      to: "/schedule",
+      title: "Feeding",
+      items: [
+        {
+          icon: <Calendar size={20} />,
+          text: "Schedule",
+          to: "/schedule",
+        },
+        {
+          icon: <Utensils size={20} />,
+          text: "Manual Feed",
+          to: "/manual-feed",
+        },
+        {
+          icon: <BarChart3 size={20} />,
+          text: "Statistics",
+          to: "/statistics",
+        },
+        {
+          icon: <FileText size={20} />,
+          text: "Food Levels",
+          to: "/food-levels",
+        },
+      ],
     },
     {
-      icon: <Utensils size={20} />,
-      text: "Manual Feed",
-      to: "/manual-feed",
+      title: "Device",
+      items: [
+        {
+          icon: <Wifi size={20} />,
+          text: "Connectivity",
+          to: "/connectivity",
+        },
+        {
+          icon: <Settings size={20} />,
+          text: "Device Settings",
+          to: `/device/${user?.deviceId || ''}`,
+          hidden: !user?.deviceId,
+        },
+      ],
     },
     {
-      icon: <BarChart3 size={20} />,
-      text: "Statistics",
-      to: "/statistics",
-    },
-    {
-      icon: <Wifi size={20} />,
-      text: "Connectivity",
-      to: "/connectivity",
-    },
-    {
-      icon: <Settings size={20} />,
-      text: "Device Settings",
-      to: `/device/${user?.deviceId || ''}`,
-      hidden: !user?.deviceId,
-    },
-    {
-      icon: <UserIcon size={20} />,
-      text: "Profile",
-      to: "/profile",
+      title: "Help",
+      items: [
+        {
+          icon: <FileText size={20} />,
+          text: "Documentation",
+          to: "/documentation",
+        },
+      ],
     },
   ];
 
-  // Admin-only navigation items
-  const adminItems: NavigationItem[] = [
-    {
-      icon: <Shield size={20} />,
-      text: "Admin Dashboard",
-      to: "/admin",
-    }
-  ];
+  // Add admin category if user is admin
+  if (isAdmin) {
+    navigationCategories.push({
+      title: "Admin",
+      items: [
+        {
+          icon: <Shield size={20} />,
+          text: "Admin Dashboard",
+          to: "/admin",
+        },
+      ],
+    });
+  }
 
-  // Determine which items to show based on user role
-  const sidebarItems = isAdmin 
-    ? [...regularItems, ...adminItems] 
-    : regularItems;
+  // Render sidebar content with categories
+  const renderSidebarContent = (onClick?: () => void) => (
+    <>
+      {navigationCategories.map((category) => {
+        const visibleItems = category.items.filter((item) => !item.hidden);
+        if (visibleItems.length === 0) return null;
 
-  // Filter out hidden items
-  const visibleItems = sidebarItems.filter(item => !item.hidden);
-
-  return (
-    <div className="flex flex-col min-h-screen bg-gray-50">
-      {/* Mobile Header */}
-      <header className="md:hidden bg-white border-b border-gray-200 p-2 flex items-center justify-between">
-        <div className="flex items-center">
-          <Sheet open={open} onOpenChange={setOpen}>
-            <SheetTrigger asChild>
-              <button className="p-1 mr-2 hover:bg-gray-100 rounded-md transition-colors">
-                <Menu size={20} />
-              </button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-64 p-0">
-              <div className="p-3 flex items-center space-x-2 border-b">
-                <div className="bg-pet-primary p-1 rounded-md">
-                  <span className="text-white text-xl">🐱</span>
-                </div>
-                <span className="font-bold text-base">PetFeeder</span>
-              </div>
-              <nav className="p-3 space-y-1">
-                {visibleItems.map((item) => (
-                  <SidebarItem
-                    key={item.to}
-                    icon={item.icon}
-                    text={item.text}
-                    to={item.to}
-                    active={location.pathname === item.to}
-                    onClick={() => setOpen(false)}
-                  />
-                ))}
-                <button
-                  onClick={() => {
-                    handleLogout();
-                    setOpen(false);
-                  }}
-                  className="flex items-center py-3 px-4 rounded-md transition-colors text-gray-600 hover:bg-gray-100 w-full text-left"
-                >
-                  <div className="mr-3">
-                    <LogOut size={20} />
-                  </div>
-                  <span>Logout</span>
-                </button>
-              </nav>
-            </SheetContent>
-          </Sheet>
-          <div className="flex items-center space-x-2">
-            <div className="bg-pet-primary p-1 rounded-md">
-              <span className="text-white text-sm">🐱</span>
-            </div>
-            <span className="font-bold text-sm">PetFeeder</span>
-          </div>
-        </div>
-        <Link to="/profile">
-          <ErrorBoundary>
-            <ProfileAvatar user={currentUser} size="sm" className="w-8 h-8" />
-          </ErrorBoundary>
-        </Link>
-      </header>
-
-      <div className="flex flex-1">
-        {/* Desktop Sidebar */}
-        <aside className="hidden md:block w-64 border-r border-gray-200 bg-white">
-          <div className="p-4 flex items-center justify-between border-b">
-            <div className="flex items-center space-x-2">
-              <div className="bg-pet-primary p-1 rounded-md">
-                <span className="text-white text-xl">🐱</span>
-              </div>
-              <span className="font-bold text-lg">PetFeeder</span>
-            </div>
-            <Link to="/profile">
-              <ErrorBoundary>
-                <ProfileAvatar user={currentUser} size="sm" />
-              </ErrorBoundary>
-            </Link>
-          </div>
-          <nav className="p-4 space-y-1">
+        return (
+          <SidebarCategory key={category.title} title={category.title}>
             {visibleItems.map((item) => (
               <SidebarItem
                 key={item.to}
                 icon={item.icon}
                 text={item.text}
                 to={item.to}
-                active={location.pathname === item.to}
+                active={isRouteActive(item.to)}
+                onClick={onClick}
               />
             ))}
-            <button
-              onClick={handleLogout}
-              className="flex items-center py-3 px-4 rounded-md transition-colors text-gray-600 hover:bg-gray-100 w-full text-left"
-            >
-              <div className="mr-3">
-                <LogOut size={20} />
+          </SidebarCategory>
+        );
+      })}
+    </>
+  );
+
+  // Profile dropdown component
+  const ProfileDropdown = () => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="focus:outline-none">
+          <ErrorBoundary>
+            <ProfileAvatar user={currentUser} size="sm" />
+          </ErrorBoundary>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <div className="flex items-center justify-start p-2">
+          <div className="flex items-center space-x-2">
+            <ProfileAvatar user={currentUser} size="sm" />
+            <div className="flex flex-col">
+              <p className="text-sm font-medium truncate max-w-[180px]">{currentUser?.displayName || 'User'}</p>
+              <p className="text-xs text-gray-500 truncate max-w-[180px]">{currentUser?.email}</p>
+            </div>
+          </div>
+        </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link to="/profile" className="cursor-pointer flex items-center">
+            <UserIcon className="mr-2 h-4 w-4" />
+            <span>Profile</span>
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link to="/settings" className="cursor-pointer flex items-center">
+            <Settings className="mr-2 h-4 w-4" />
+            <span>Settings</span>
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600 dark:text-red-400">
+          <LogOut className="mr-2 h-4 w-4" />
+          <span>Logout</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  return (
+    <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Mobile Header */}
+      <header className="md:hidden bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-2 flex items-center justify-between sticky top-0 z-10">
+        <div className="flex items-center">
+          <Sheet open={open} onOpenChange={setOpen}>
+            <SheetTrigger asChild>
+              <button className="p-1 mr-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors">
+                <Menu size={20} className="text-gray-700 dark:text-gray-300" />
+              </button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-64 p-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
+              <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <div className="h-8 w-8 bg-pet-primary rounded-full flex items-center justify-center">
+                      <HandPlatter className="text-white h-5 w-5" />
+                    </div>
+                    <span className="font-bold text-lg dark:text-white">PetFeeder</span>
+                  </div>
+                </div>
               </div>
-              <span>Logout</span>
-            </button>
+              <nav className="p-4 overflow-y-auto max-h-[calc(100vh-80px)]">
+                {renderSidebarContent(() => setOpen(false))}
+              </nav>
+            </SheetContent>
+          </Sheet>
+          <Link to="/" className="flex items-center space-x-2">
+            <div className="h-8 w-8 bg-pet-primary rounded-full flex items-center justify-center">
+              <HandPlatter className="text-white h-5 w-5" />
+            </div>
+            <span className="font-bold text-lg dark:text-white">PetFeeder</span>
+          </Link>
+        </div>
+        <div className="flex items-center space-x-2">
+          <ThemeToggle />
+          <ProfileDropdown />
+        </div>
+      </header>
+
+      <div className="flex flex-1">
+        {/* Desktop Sidebar */}
+        <aside className="hidden md:block w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 p-4 sticky top-0 h-screen overflow-y-auto">
+          <div className="flex items-center justify-between mb-6">
+            <Link to="/" className="flex items-center">
+              <div className="h-8 w-8 bg-pet-primary rounded-full flex items-center justify-center mr-2">
+                <HandPlatter className="text-white h-5 w-5" />
+              </div>
+              <span className="text-xl font-bold text-gray-900 dark:text-white">PetFeeder</span>
+            </Link>
+          </div>
+          <nav className="space-y-4">
+            {renderSidebarContent()}
           </nav>
         </aside>
 
-        {/* Main content */}
-        <div className="flex-1 flex flex-col">
-          <main className="flex-1 overflow-auto p-3 md:p-4">
+        {/* Main Content */}
+        <main className="flex-1 bg-gray-50 dark:bg-gray-900 overflow-auto">
+          <div className="hidden md:flex items-center justify-end p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10">
+            <div className="flex items-center space-x-4">
+              <ThemeToggle />
+              <ProfileDropdown />
+            </div>
+          </div>
+          <div className="p-4 md:p-6">
             {children}
-          </main>
-          <Footer />
-        </div>
+          </div>
+        </main>
       </div>
+
+      <Footer />
     </div>
   );
 };

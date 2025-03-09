@@ -1,24 +1,26 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { requestNotificationPermission, saveUserFCMToken, onForegroundMessage } from "@/lib/firebase";
+import { requestNotificationPermission, saveUserFCMToken, onForegroundMessage, removeUserFCMToken } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 
 interface NotificationContextProps {
   notificationsEnabled: boolean;
   requestPermission: () => Promise<boolean>;
+  disableNotifications: () => Promise<void>;
 }
 
 const NotificationContext = createContext<NotificationContextProps | undefined>(undefined);
 
-export const useNotifications = () => {
+// Use a named function declaration instead of an arrow function
+export function useNotifications() {
   const context = useContext(NotificationContext);
   if (!context) {
     throw new Error("useNotifications must be used within a NotificationProvider");
   }
   return context;
-};
+}
 
-export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const { currentUser } = useAuth();
   const { toast } = useToast();
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -86,16 +88,40 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   };
 
+  const disableNotifications = async () => {
+    if (!currentUser) return;
+    
+    try {
+      // Remove the FCM token from the user's profile
+      await removeUserFCMToken(currentUser.uid);
+      setNotificationsEnabled(false);
+      
+      toast({
+        title: "Notifications Disabled",
+        description: "You will no longer receive notifications.",
+      });
+    } catch (error) {
+      console.error("Error disabling notifications:", error);
+      
+      toast({
+        title: "Error",
+        description: "Failed to disable notifications. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <NotificationContext.Provider
       value={{
         notificationsEnabled,
         requestPermission,
+        disableNotifications
       }}
     >
       {children}
     </NotificationContext.Provider>
   );
-};
+}
 
 export default NotificationProvider; 

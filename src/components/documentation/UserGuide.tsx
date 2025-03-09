@@ -1,9 +1,20 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Home, Calendar, Bell, Settings, History, PieChart, Lock, Share } from "lucide-react";
+import { Home, Calendar, Bell, Settings, History, PieChart, Lock, Share, Menu } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export const UserGuide = () => {
+  const [activeSection, setActiveSection] = useState<string | null>(null);
+
+  const scrollToSection = (sectionId: string) => {
+    setActiveSection(sectionId);
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Alert>
@@ -20,8 +31,66 @@ export const UserGuide = () => {
         </p>
       </div>
 
+      {/* Table of Contents */}
+      <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg mb-6">
+        <div className="flex items-center mb-2">
+          <Menu className="mr-2 h-5 w-5" />
+          <h3 className="text-lg font-semibold">Table of Contents</h3>
+        </div>
+        <nav className="space-y-1">
+          <Button 
+            variant="ghost" 
+            className={`w-full justify-start ${activeSection === 'getting-started' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => scrollToSection('getting-started')}
+          >
+            <Home className="mr-2 h-4 w-4" />
+            Getting Started
+          </Button>
+          <Button 
+            variant="ghost" 
+            className={`w-full justify-start ${activeSection === 'dashboard' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => scrollToSection('dashboard')}
+          >
+            <PieChart className="mr-2 h-4 w-4" />
+            Dashboard
+          </Button>
+          <Button 
+            variant="ghost" 
+            className={`w-full justify-start ${activeSection === 'scheduling' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => scrollToSection('scheduling')}
+          >
+            <Calendar className="mr-2 h-4 w-4" />
+            Scheduling
+          </Button>
+          <Button 
+            variant="ghost" 
+            className={`w-full justify-start ${activeSection === 'history' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => scrollToSection('history')}
+          >
+            <History className="mr-2 h-4 w-4" />
+            Feeding History
+          </Button>
+          <Button 
+            variant="ghost" 
+            className={`w-full justify-start ${activeSection === 'notifications' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => scrollToSection('notifications')}
+          >
+            <Bell className="mr-2 h-4 w-4" />
+            Notifications
+          </Button>
+          <Button 
+            variant="ghost" 
+            className={`w-full justify-start ${activeSection === 'settings' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => scrollToSection('settings')}
+          >
+            <Settings className="mr-2 h-4 w-4" />
+            Settings
+          </Button>
+        </nav>
+      </div>
+
       <Accordion type="single" collapsible className="w-full">
-        <AccordionItem value="getting-started">
+        <AccordionItem value="getting-started" id="getting-started">
           <AccordionTrigger className="text-lg font-medium">
             <div className="flex items-center">
               <Home className="mr-2 h-5 w-5" />

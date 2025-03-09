@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Accordion,
   AccordionContent,
@@ -6,8 +6,20 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Menu, Cpu, Wifi, Settings, RefreshCw, AlertTriangle, Wrench } from "lucide-react";
 
 export function ESP32Guide() {
+  const [activeSection, setActiveSection] = useState<string | null>(null);
+
+  const scrollToSection = (sectionId: string) => {
+    setActiveSection(sectionId);
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Alert>
@@ -16,8 +28,66 @@ export function ESP32Guide() {
         </AlertDescription>
       </Alert>
 
+      {/* Table of Contents */}
+      <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg mb-6">
+        <div className="flex items-center mb-2">
+          <Menu className="mr-2 h-5 w-5" />
+          <h3 className="text-lg font-semibold">Table of Contents</h3>
+        </div>
+        <nav className="space-y-1">
+          <Button 
+            variant="ghost" 
+            className={`w-full justify-start ${activeSection === 'hardware-setup' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => scrollToSection('hardware-setup')}
+          >
+            <Cpu className="mr-2 h-4 w-4" />
+            Hardware Setup
+          </Button>
+          <Button 
+            variant="ghost" 
+            className={`w-full justify-start ${activeSection === 'wifi-setup' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => scrollToSection('wifi-setup')}
+          >
+            <Wifi className="mr-2 h-4 w-4" />
+            WiFi Setup
+          </Button>
+          <Button 
+            variant="ghost" 
+            className={`w-full justify-start ${activeSection === 'firmware' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => scrollToSection('firmware')}
+          >
+            <Settings className="mr-2 h-4 w-4" />
+            Firmware
+          </Button>
+          <Button 
+            variant="ghost" 
+            className={`w-full justify-start ${activeSection === 'updates' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => scrollToSection('updates')}
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Updates
+          </Button>
+          <Button 
+            variant="ghost" 
+            className={`w-full justify-start ${activeSection === 'troubleshooting' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => scrollToSection('troubleshooting')}
+          >
+            <AlertTriangle className="mr-2 h-4 w-4" />
+            Troubleshooting
+          </Button>
+          <Button 
+            variant="ghost" 
+            className={`w-full justify-start ${activeSection === 'maintenance' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => scrollToSection('maintenance')}
+          >
+            <Wrench className="mr-2 h-4 w-4" />
+            Maintenance
+          </Button>
+        </nav>
+      </div>
+
       <Accordion type="single" collapsible className="w-full">
-        <AccordionItem value="hardware-setup">
+        <AccordionItem value="hardware-setup" id="hardware-setup">
           <AccordionTrigger>Hardware Setup</AccordionTrigger>
           <AccordionContent>
             <div className="space-y-4">

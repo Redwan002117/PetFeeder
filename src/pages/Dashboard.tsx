@@ -112,167 +112,185 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle>Device Status</CardTitle>
-            <CardDescription>Current status of your pet feeder</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  {deviceStatus.online ? (
-                    <CheckCircle className="h-5 w-5 text-green-500" />
-                  ) : (
-                    <AlertCircle className="h-5 w-5 text-amber-500" />
-                  )}
-                  <span>Device Status</span>
+    <div className="container mx-auto py-6">
+      <h1 className="text-3xl font-bold mb-6">Dashboard</h1>
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle>Device Status</CardTitle>
+              <CardDescription>Current status of your pet feeder</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    {deviceStatus.online ? (
+                      <CheckCircle className="h-5 w-5 text-green-500" />
+                    ) : (
+                      <AlertCircle className="h-5 w-5 text-amber-500" />
+                    )}
+                    <span>Device Status</span>
+                  </div>
+                  <span className={deviceStatus.online ? "text-green-500" : "text-amber-500"}>
+                    {deviceStatus.online ? "Online" : "Offline"}
+                  </span>
                 </div>
-                <span className={deviceStatus.online ? "text-green-500" : "text-amber-500"}>
-                  {deviceStatus.online ? "Online" : "Offline"}
-                </span>
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  {deviceStatus.wifiConnected ? (
-                    <Wifi className="h-5 w-5 text-green-500" />
-                  ) : (
-                    <WifiOff className="h-5 w-5 text-red-500" />
-                  )}
-                  <span>Wi-Fi Connection</span>
+                
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    {deviceStatus.wifiConnected ? (
+                      <Wifi className="h-5 w-5 text-green-500" />
+                    ) : (
+                      <WifiOff className="h-5 w-5 text-red-500" />
+                    )}
+                    <span>Wi-Fi Connection</span>
+                  </div>
+                  <span className={deviceStatus.wifiConnected ? "text-green-500" : "text-red-500"}>
+                    {deviceStatus.wifiConnected ? "Connected" : "Disconnected"}
+                  </span>
                 </div>
-                <span className={deviceStatus.wifiConnected ? "text-green-500" : "text-red-500"}>
-                  {deviceStatus.wifiConnected ? "Connected" : "Disconnected"}
-                </span>
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <PieChart className="h-5 w-5 text-blue-500" />
-                  <span>Food Level</span>
+                
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <PieChart className="h-5 w-5 text-blue-500" />
+                    <span>Food Level</span>
+                  </div>
+                  <span>
+                    {deviceStatus.foodLevel ? `${deviceStatus.foodLevel}%` : "Unknown"}
+                  </span>
                 </div>
-                <span>
-                  {deviceStatus.foodLevel ? `${deviceStatus.foodLevel}%` : "Unknown"}
-                </span>
+                
+                <Link to="/connectivity">
+                  <Button variant="outline" className="w-full mt-4">
+                    <Wifi className="mr-2 h-4 w-4" />
+                    Connectivity Settings
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
               </div>
-              
-              <Link to="/connectivity">
-                <Button variant="outline" className="w-full mt-4">
-                  <Wifi className="mr-2 h-4 w-4" />
-                  Connectivity Settings
-                  <ArrowRight className="ml-2 h-4 w-4" />
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle>Quick Actions</CardTitle>
+              <CardDescription>Control your pet feeder</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <Button 
+                  className="w-full bg-pet-primary hover:bg-pet-primary/90 h-16"
+                  disabled={isFeeding || !deviceStatus.online}
+                  onClick={handleManualFeed}
+                >
+                  <HandPlatter className="mr-2 h-6 w-6" />
+                  {isFeeding ? "Dispensing Food..." : "Feed Now"}
                 </Button>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <Link to="/schedule" className="w-full">
+                    <Button variant="outline" className="w-full h-14">
+                      <Clock className="mr-2 h-5 w-5" />
+                      Schedule
+                    </Button>
+                  </Link>
+                  <Link to="/statistics" className="w-full">
+                    <Button variant="outline" className="w-full h-14">
+                      <PieChart className="mr-2 h-5 w-5" />
+                      Statistics
+                    </Button>
+                  </Link>
+                </div>
+                
+                {nextFeeding && nextFeeding.time ? (
+                  <div className="bg-muted p-4 rounded-lg">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <Clock className="h-5 w-5 text-pet-primary" />
+                      <span className="font-medium">Next scheduled feeding</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>{formatFeedingTime(nextFeeding.time)}</span>
+                      <span className="text-muted-foreground">{nextFeeding.amount || 0}g</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-muted p-4 rounded-lg">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <Clock className="h-5 w-5 text-pet-primary" />
+                      <span className="font-medium">No scheduled feedings</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Set up a feeding schedule</span>
+                      <Link to="/schedule">
+                        <Button variant="outline" size="sm">
+                          Schedule
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
         
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle>Quick Actions</CardTitle>
-            <CardDescription>Control your pet feeder</CardDescription>
+          <CardHeader>
+            <CardTitle>Recent Activity</CardTitle>
+            <CardDescription>Latest events from your pet feeder</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <Button 
-                className="w-full bg-pet-primary hover:bg-pet-primary/90 h-16"
-                disabled={isFeeding || !deviceStatus.online}
-                onClick={handleManualFeed}
-              >
-                <HandPlatter className="mr-2 h-6 w-6" />
-                {isFeeding ? "Dispensing Food..." : "Feed Now"}
-              </Button>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <Link to="/schedule" className="w-full">
-                  <Button variant="outline" className="w-full h-14">
-                    <Clock className="mr-2 h-5 w-5" />
-                    Schedule
+            <Tabs defaultValue="feedings">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="feedings">Feedings</TabsTrigger>
+                <TabsTrigger value="events">Events</TabsTrigger>
+              </TabsList>
+              <TabsContent value="feedings" className="pt-4">
+                {feedingHistory.length > 0 ? (
+                  <div className="space-y-4">
+                    {feedingHistory.map((feeding) => (
+                      <div key={feeding.id} className="flex items-center justify-between border-b pb-3">
+                        <div className="flex items-center space-x-3">
+                          <div className="h-9 w-9 bg-blue-100 rounded-full flex items-center justify-center">
+                            <HandPlatter className="h-5 w-5 text-pet-primary" />
+                          </div>
+                          <div>
+                            <p className="font-medium">
+                              {feeding.type === 'manual' ? 'Manual Feed' : 'Scheduled Feed'}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {feeding.timestamp ? format(new Date(feeding.timestamp), 'MMM d, h:mm a') : 'Unknown time'}
+                            </p>
+                          </div>
+                        </div>
+                        <span className="font-medium">
+                          {feeding.amount ? `${feeding.amount}g` : '0g'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-6">
+                    <p className="text-muted-foreground">No feeding history available</p>
+                  </div>
+                )}
+                <Link to="/statistics">
+                  <Button variant="link" className="mt-2 pl-0">
+                    View all history
+                    <ArrowRight className="ml-1 h-4 w-4" />
                   </Button>
                 </Link>
-                <Link to="/statistics" className="w-full">
-                  <Button variant="outline" className="w-full h-14">
-                    <PieChart className="mr-2 h-5 w-5" />
-                    Statistics
-                  </Button>
-                </Link>
-              </div>
-              
-              {nextFeeding && (
-                <div className="bg-muted p-4 rounded-lg">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <Clock className="h-5 w-5 text-pet-primary" />
-                    <span className="font-medium">Next scheduled feeding</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>{formatFeedingTime(nextFeeding.time)}</span>
-                    <span className="text-muted-foreground">{nextFeeding.amount}g</span>
-                  </div>
+              </TabsContent>
+              <TabsContent value="events" className="pt-4">
+                <div className="text-center py-6">
+                  <p className="text-muted-foreground">No recent events</p>
                 </div>
-              )}
-            </div>
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
       </div>
-      
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Activity</CardTitle>
-          <CardDescription>Latest events from your pet feeder</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="feedings">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="feedings">Feedings</TabsTrigger>
-              <TabsTrigger value="events">Events</TabsTrigger>
-            </TabsList>
-            <TabsContent value="feedings" className="pt-4">
-              {feedingHistory.length > 0 ? (
-                <div className="space-y-4">
-                  {feedingHistory.map((feeding) => (
-                    <div key={feeding.id} className="flex items-center justify-between border-b pb-3">
-                      <div className="flex items-center space-x-3">
-                        <div className="h-9 w-9 bg-blue-100 rounded-full flex items-center justify-center">
-                          <HandPlatter className="h-5 w-5 text-pet-primary" />
-                        </div>
-                        <div>
-                          <p className="font-medium">
-                            {feeding.type === 'manual' ? 'Manual Feed' : 'Scheduled Feed'}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {feeding.timestamp ? format(new Date(feeding.timestamp), 'MMM d, h:mm a') : 'Unknown time'}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="font-medium">
-                        {feeding.amount}g
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-6">
-                  <p className="text-muted-foreground">No feeding history available</p>
-                </div>
-              )}
-              <Link to="/statistics">
-                <Button variant="link" className="mt-2 pl-0">
-                  View all history
-                  <ArrowRight className="ml-1 h-4 w-4" />
-                </Button>
-              </Link>
-            </TabsContent>
-            <TabsContent value="events" className="pt-4">
-              <div className="text-center py-6">
-                <p className="text-muted-foreground">No recent events</p>
-              </div>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
     </div>
   );
 };

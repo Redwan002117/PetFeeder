@@ -2,6 +2,45 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Add smooth transition for theme changes */
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+html, body {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+* {
+  transition: border-color 0.3s ease, background-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color: #213547;
+    background-color: #ffffff;
+  }
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -55,13 +94,13 @@
     --popover-foreground: 210 40% 98%;
 
     --primary: 243 75% 59%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
 
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
 
     --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted-foreground: 215 20.2% 75.1%;
 
     --accent: 217.2 32.6% 17.5%;
     --accent-foreground: 210 40% 98%;
@@ -159,6 +198,51 @@
   ::-webkit-scrollbar-thumb:hover {
     background: #a0a0a0;
   }
+  
+  /* Dark mode scrollbar styles */
+  .dark ::-webkit-scrollbar-track {
+    background: #2d3748;
+    border-radius: 4px;
+  }
+
+  .dark ::-webkit-scrollbar-thumb {
+    background: #4a5568;
+    border-radius: 4px;
+  }
+
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: #718096;
+  }
+
+  /* Improved focus styles for dark mode */
+  .dark :focus {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+
+  .dark :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  .dark :focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+
+  /* Improved focus styles for light mode */
+  :focus {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
 }
 
 /* Custom animations */
@@ -198,9 +282,32 @@
   to { transform: rotate(360deg); }
 }
 
+@keyframes fadeInScale {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes fadeInUp {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Animation utility classes */
 .animate-fadeIn {
-  animation: fadeIn 0.5s ease-in-out;
+  animation: fadeIn 0.5s ease-out forwards;
+  opacity: 0;
 }
 
 .animate-slideUp {
@@ -227,6 +334,18 @@
   animation: spin 1s linear infinite;
 }
 
+.animate-fadeInScale {
+  animation: fadeInScale 0.5s ease-out forwards;
+  animation-delay: 0.2s;
+  opacity: 0;
+}
+
+.animate-fadeInUp {
+  animation: fadeInUp 0.5s ease-out forwards;
+  animation-delay: 0.4s;
+  opacity: 0;
+}
+
 /* Animation delays */
 .delay-100 {
   animation-delay: 100ms;
@@ -246,4 +365,35 @@
 
 .delay-500 {
   animation-delay: 500ms;
+}
+
+/* Transition helper class */
+.dark-transition {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Respect user's preference for reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  :root, html, body, * {
+    transition: none !important;
+    animation: none !important;
+  }
+  
+  .dark-transition {
+    transition: none !important;
+  }
+
+  .animate-fadeIn,
+  .animate-fadeInScale,
+  .animate-fadeInUp {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* Dark mode styles */
+.dark {
+  color-scheme: dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
 }

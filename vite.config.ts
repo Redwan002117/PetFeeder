@@ -1,20 +1,18 @@
 import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react-swc";
+import react from "@vitejs/plugin-react";
 import path from "path";
-import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   base: '/',
   server: {
     host: "::",
-    port: 8080,
+    port: 3000,
+    open: true,
   },
   plugins: [
     react(),
-    mode === 'development' &&
-    componentTagger(),
-  ].filter(Boolean),
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -22,7 +20,7 @@ export default defineConfig(({ mode }) => ({
   },
   build: {
     outDir: 'dist',
-    sourcemap: mode !== "production",
+    sourcemap: true,
     minify: 'terser',
     terserOptions: {
       compress: {
@@ -37,20 +35,13 @@ export default defineConfig(({ mode }) => ({
     rollupOptions: {
       output: {
         manualChunks: {
-          vendor: [
-            'react', 
-            'react-dom', 
-            'react-router-dom',
-          ],
-          firebase: [
-            'firebase/app',
-            'firebase/auth',
-            'firebase/database',
-            'firebase/storage',
-            'firebase/messaging',
-          ],
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'firebase-vendor': ['firebase/app', 'firebase/auth', 'firebase/firestore'],
         },
       },
     },
+  },
+  preview: {
+    port: 5000,
   },
 }));

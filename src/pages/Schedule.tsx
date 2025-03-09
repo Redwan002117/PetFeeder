@@ -220,10 +220,10 @@ const Schedule = () => {
                 Add Schedule
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent aria-describedby="schedule-dialog-description">
               <DialogHeader>
                 <DialogTitle>Add Feeding Schedule</DialogTitle>
-                <DialogDescription>
+                <DialogDescription id="schedule-dialog-description">
                   Set up a new automatic feeding schedule for your pet.
                 </DialogDescription>
               </DialogHeader>

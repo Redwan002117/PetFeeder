@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DeviceWiFiConfig } from '@/components/DeviceWiFiConfig';
 import { useDevice } from '@/contexts/DeviceContext';
 
-export const DeviceManagement = () => {
+const DeviceManagement = () => {
   const { device, loading } = useDevice();
 
   if (loading) {
@@ -93,4 +93,6 @@ export const DeviceManagement = () => {
       </Tabs>
     </div>
   );
-}; 
+}
+
+export default DeviceManagement; 
