@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { database, ref, get, query, orderByChild, limitToLast } from '@/lib/firebase';
+import { database, ref, get, onValue, off } from '@/lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, FileText, AlertCircle, Info, PawPrint } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -32,15 +32,11 @@ export const SystemLogs: React.FC = () => {
     try {
       setLoading(true);
       
-      // Create a query to get the logs
+      // Fetch logs from Firebase Realtime Database
       const logsRef = ref(database, 'logs');
-      const logsQuery = query(
-        logsRef,
-        orderByChild('timestamp'),
-        limitToLast(limit)
-      );
       
-      const snapshot = await get(logsQuery);
+      // Get all logs and then filter/sort them
+      const snapshot = await get(logsRef);
       
       if (snapshot.exists()) {
         const logsData = snapshot.val();
@@ -58,6 +54,9 @@ export const SystemLogs: React.FC = () => {
         if (filter !== 'all') {
           logsArray = logsArray.filter(log => log.level === filter);
         }
+        
+        // Apply limit
+        logsArray = logsArray.slice(0, limit);
         
         setLogs(logsArray);
       } else {
