@@ -2,17 +2,37 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Auto Cat Feeder</title>
-    <meta name="description" content="Control your pet feeder remotely, set feeding schedules, and monitor your pet's feeding habits." />
-    <meta name="author" content="@GamerNo002117" />
-    <meta property="og:image" content="/og-image.png" />
-    <meta name="theme-color" content="#4f46e5" />
-    
-    <!-- PWA support -->
-    <link rel="manifest" href="/PetFeeder/manifest.json" />
-    <link rel="icon" type="image/x-icon" href="/PetFeeder/favicon.ico" />
-    <link rel="apple-touch-icon" href="/PetFeeder/og-image.png" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="PetFeeder - Smart pet feeding solution - Control your pet feeder remotely" />
+    <!-- Fix for WebSocket token error -->
+    <script>
+      // Define __WS_TOKEN__ if it's not defined (prevents errors in production)
+      window.__WS_TOKEN__ = window.__WS_TOKEN__ || null;
+    </script>
+    <title>PetFeeder</title>
+    <script>
+      // Initialize dark mode before app loads to prevent flickering
+      (function() {
+        const savedTheme = localStorage.getItem("theme");
+        const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        
+        // Add transition class first
+        document.documentElement.classList.add("dark-transition");
+        
+        if (savedTheme === "dark" || (!savedTheme && systemPrefersDark)) {
+          document.documentElement.classList.add("dark");
+        } else {
+          document.documentElement.classList.remove("dark");
+        }
+        
+        // Remove transition class after a short delay
+        setTimeout(() => {
+          document.documentElement.classList.remove("dark-transition");
+        }, 300);
+      })();
+    </script>
     
     <!-- Start Single Page Apps for GitHub Pages -->
     <script type="text/javascript">
@@ -38,13 +58,16 @@
       }(window.location))
     </script>
     <!-- End Single Page Apps for GitHub Pages -->
-    <script type="module" crossorigin src="/PetFeeder/assets/index-4kG5MFep.js"></script>
-    <link rel="stylesheet" crossorigin href="/PetFeeder/assets/index-t1j3K9Mn.css">
-  </head>
-
+    <script type="module" crossorigin src="/assets/index-CspPY3fT.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/react-vendor-CZYxaXJj.js">
+    <link rel="modulepreload" crossorigin href="/assets/firebase-vendor-CnyJyl5h.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-DIFozWi4.css">
+  <script>
+          // Fix for WebSocket token error in production
+          window.__WS_TOKEN__ = window.__WS_TOKEN__ || null;
+        </script>
+        </head>
   <body>
     <div id="root"></div>
-    <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS VERY COMMENT! -->
-    <script src="https://cdn.gpteng.co/gptengineer.js" type="module"></script>
   </body>
 </html>
