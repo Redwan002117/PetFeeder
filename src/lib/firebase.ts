@@ -1,4 +1,4 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApp, FirebaseApp } from "firebase/app";
 import { 
   getAuth, 
   signInWithEmailAndPassword, 
@@ -14,7 +14,11 @@ import {
   signInWithPopup,
   sendEmailVerification as firebaseSendEmailVerification,
   applyActionCode,
-  verifyBeforeUpdateEmail
+  verifyBeforeUpdateEmail,
+  setPersistence,
+  browserLocalPersistence,
+  signInWithRedirect,
+  getRedirectResult
 } from "firebase/auth";
 import { 
   getDatabase, 
@@ -25,13 +29,15 @@ import {
   update, 
   remove,
   get,
-  serverTimestamp
+  serverTimestamp,
+  Database
 } from "firebase/database";
 import {
   getStorage,
   ref as storageRef,
   uploadBytes,
-  getDownloadURL
+  getDownloadURL,
+  Storage
 } from "firebase/storage";
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
 
@@ -41,93 +47,316 @@ const firebaseConfig = {
   authDomain: "catfeeder002117.firebaseapp.com",
   databaseURL: "https://catfeeder002117-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "catfeeder002117",
-  storageBucket: "catfeeder002117.firebasestorage.app",
+  storageBucket: "catfeeder002117.appspot.com", // Fixed storage bucket URL
   messagingSenderId: "185578811050",
   appId: "1:185578811050:web:eea3a21fd11073ae1e6ad3"
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const database = getDatabase(app);
-const storage = getStorage(app);
-const googleProvider = new GoogleAuthProvider();
-
-// Configure Firebase Storage CORS settings
-// Note: This is a client-side setting and won't affect the actual Firebase Storage CORS rules
-// You need to configure CORS in the Firebase console for production
-try {
-  storage.maxOperationRetryTime = 20000; // Increase retry time
-  storage.maxUploadRetryTime = 20000; // Increase upload retry time
-} catch (error) {
-  console.error("Error configuring storage:", error);
-}
-
+// Initialize Firebase - with error handling and app instance management
+let app: FirebaseApp;
+let auth: any;
+let database: Database | any;
+let storage: Storage | any;
 let messaging: any = null;
+let googleProvider: GoogleAuthProvider;
 
-// Initialize Firebase Cloud Messaging and get a reference to the service
-// Only initialize in browser environment, not in service worker
-if (typeof window !== 'undefined') {
+// Function to safely initialize Firebase
+const initializeFirebase = () => {
   try {
-    messaging = getMessaging(app);
+    // Check if app is already initialized
+    try {
+      app = getApp();
+      console.log("Firebase app already initialized, retrieving existing app");
+    } catch (error) {
+      // If not initialized, initialize it
+      console.log("Initializing Firebase app with config");
+      app = initializeApp(firebaseConfig);
+    }
+
+    // Initialize Auth
+    try {
+      auth = getAuth(app);
+      // Set persistence to LOCAL to keep the user logged in
+      setPersistence(auth, browserLocalPersistence)
+        .then(() => {
+          console.log("Firebase persistence set to LOCAL");
+        })
+        .catch((error) => {
+          console.error("Error setting persistence:", error);
+        });
+      googleProvider = new GoogleAuthProvider();
+    } catch (error) {
+      console.error("Error initializing Firebase auth:", error);
+      throw error;
+    }
+
+    // Initialize Database
+    try {
+      database = getDatabase(app);
+      console.log("Firebase database initialized successfully");
+    } catch (error) {
+      console.error("Error initializing Firebase database:", error);
+      
+      // Create a mock database for offline functionality
+      console.log("Creating mock database for offline functionality");
+      database = createMockDatabase();
+    }
+
+    // Initialize Storage
+    try {
+      storage = getStorage(app);
+      console.log("Firebase storage initialized successfully");
+      
+      // Configure Storage settings
+      try {
+        storage.maxOperationRetryTime = 20000; // Increase retry time
+        storage.maxUploadRetryTime = 20000; // Increase upload retry time
+      } catch (storageConfigError) {
+        console.warn("Could not configure storage settings:", storageConfigError);
+      }
+    } catch (error) {
+      console.error("Error initializing Storage:", error);
+      
+      // Create a mock storage for offline functionality
+      console.log("Creating mock storage for offline functionality");
+      storage = createMockStorage();
+    }
+
+    // Initialize Messaging (only in browser environment)
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      try {
+        messaging = getMessaging(app);
+        console.log("Firebase messaging initialized successfully");
+      } catch (error) {
+        console.warn("Failed to initialize Firebase messaging:", error);
+        messaging = null;
+      }
+    } else {
+      console.log("Messaging not initialized - not in browser or service worker not supported");
+      messaging = null;
+    }
+
+    console.log("Firebase initialization complete");
+    return true;
   } catch (error) {
-    console.error("Failed to initialize Firebase messaging:", error);
+    console.error("Error during Firebase initialization:", error);
+    return false;
   }
-}
+};
+
+// Create a mock database for offline functionality
+const createMockDatabase = () => {
+  const mockData: any = {};
+  
+  return {
+    ref: (path: string) => ({
+      set: (data: any) => {
+        console.log(`Mock database: set ${path}`, data);
+        setNestedValue(mockData, path.split('/'), data);
+        return Promise.resolve();
+      },
+      update: (data: any) => {
+        console.log(`Mock database: update ${path}`, data);
+        const currentData = getNestedValue(mockData, path.split('/')) || {};
+        setNestedValue(mockData, path.split('/'), { ...currentData, ...data });
+        return Promise.resolve();
+      },
+      push: () => {
+        const id = Math.random().toString(36).substring(2, 15);
+        console.log(`Mock database: push ${path} with id ${id}`);
+        return {
+          key: id,
+          set: (data: any) => {
+            setNestedValue(mockData, [...path.split('/'), id], data);
+            return Promise.resolve();
+          }
+        };
+      },
+      remove: () => {
+        console.log(`Mock database: remove ${path}`);
+        removeNestedValue(mockData, path.split('/'));
+        return Promise.resolve();
+      },
+      onValue: (callback: any) => {
+        console.log(`Mock database: onValue ${path}`);
+        const data = getNestedValue(mockData, path.split('/'));
+        callback({
+          val: () => data,
+          exists: () => !!data
+        });
+        return () => {}; // Return unsubscribe function
+      },
+      get: () => {
+        console.log(`Mock database: get ${path}`);
+        const data = getNestedValue(mockData, path.split('/'));
+        return Promise.resolve({
+          val: () => data,
+          exists: () => !!data
+        });
+      }
+    })
+  };
+};
+
+// Create a mock storage for offline functionality
+const createMockStorage = () => {
+  return {
+    ref: (path: string) => ({
+      put: () => Promise.resolve({ ref: { getDownloadURL: () => Promise.resolve('/placeholder.svg') } }),
+      getDownloadURL: () => Promise.resolve('/placeholder.svg')
+    })
+  };
+};
+
+// Helper functions for mock database
+const setNestedValue = (obj: any, pathArray: string[], value: any) => {
+  const key = pathArray.shift();
+  if (!key) return;
+  
+  if (pathArray.length === 0) {
+    obj[key] = value;
+  } else {
+    if (!obj[key]) obj[key] = {};
+    setNestedValue(obj[key], pathArray, value);
+  }
+};
+
+const getNestedValue = (obj: any, pathArray: string[]) => {
+  const key = pathArray.shift();
+  if (!key || !obj) return null;
+  
+  if (pathArray.length === 0) {
+    return obj[key];
+  } else {
+    return getNestedValue(obj[key], [...pathArray]);
+  }
+};
+
+const removeNestedValue = (obj: any, pathArray: string[]) => {
+  const key = pathArray.shift();
+  if (!key || !obj) return;
+  
+  if (pathArray.length === 0) {
+    delete obj[key];
+  } else {
+    if (obj[key]) removeNestedValue(obj[key], pathArray);
+  }
+};
+
+// Initialize Firebase
+initializeFirebase();
 
 // Authentication helper functions
-export const signIn = (email: string, password: string) => {
-  return signInWithEmailAndPassword(auth, email, password);
+export const signIn = async (email: string, password: string) => {
+  try {
+    return await signInWithEmailAndPassword(auth, email, password);
+  } catch (error) {
+    console.error("Error signing in:", error);
+    throw error;
+  }
 };
 
 export const signInWithGoogle = async () => {
   try {
-    const result = await signInWithPopup(auth, googleProvider);
-    const user = result.user;
+    // Clear any previous auth state to prevent loops
+    localStorage.removeItem('authMode');
     
+    // Store the auth mode in local storage
+    localStorage.setItem('authMode', 'signin');
+    
+    // Try to use popup for immediate feedback
     try {
-      // Check if user already exists in the database
-      const snapshot = await get(ref(database, `users/${user.uid}`));
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
       
-      if (!snapshot.exists()) {
-        // Create user data with role in the database
-        const userData = {
-          email: user.email || '',
-          displayName: user.displayName || '',
-          photoURL: user.photoURL || '',
-          role: 'user', // Default role for Google sign-in users
-          createdAt: serverTimestamp(),
-          permissions: {
-            canFeed: true,
-            canSchedule: true,
-            canViewStats: true,
-          }
-        };
-        
-        await set(ref(database, `users/${user.uid}`), userData);
-      }
-    } catch (dbError) {
-      console.error("Error saving user data after Google sign-in:", dbError);
-      // Still return the auth result even if saving to DB fails
-      // This allows the user to sign in, but they might have limited functionality
+      // Process the Google user
+      await processGoogleUser(user);
+      
+      // Clear auth mode after successful sign-in
+      localStorage.removeItem('authMode');
+      
+      return result;
+    } catch (popupError) {
+      console.warn("Popup sign-in failed, falling back to redirect:", popupError);
+      
+      // If popup fails, fall back to redirect
+      await signInWithRedirect(auth, googleProvider);
+      return null; // This will redirect, so no return value
     }
-    
-    return result;
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error signing in with Google:", error);
+    throw error;
+  }
+};
+
+// Helper function to process Google user data
+const processGoogleUser = async (user: User) => {
+  try {
+    // Check if user already exists in the database
+    const userRef = ref(database, `users/${user.uid}`);
+    const snapshot = await get(userRef);
     
-    // Provide more user-friendly error messages
-    if (error.code === 'auth/popup-closed-by-user') {
-      throw new Error("Sign-in was cancelled. Please try again.");
-    } else if (error.code === 'auth/popup-blocked') {
-      throw new Error("Pop-up was blocked by your browser. Please allow pop-ups for this site.");
-    } else if (error.code === 'auth/network-request-failed') {
-      throw new Error("Network error. Please check your internet connection and try again.");
-    } else if (error.code === 'auth/user-disabled') {
-      throw new Error("This account has been disabled. Please contact support.");
-    } else if (error.code === 'auth/account-exists-with-different-credential') {
-      throw new Error("An account already exists with the same email address but different sign-in credentials. Try signing in using a different method.");
+    if (!snapshot.exists()) {
+      // Create user data with role in the database
+      const userData = {
+        email: user.email || '',
+        displayName: user.displayName || '',
+        photoURL: user.photoURL || '',
+        role: 'user', // Default role for Google sign-in users
+        createdAt: serverTimestamp(),
+        permissions: {
+          manualFeed: true,
+          scheduleFeeding: true,
+          viewHistory: true,
+          deviceSettings: false,
+          userManagement: false
+        },
+        emailVerified: user.emailVerified
+      };
+      
+      await set(userRef, userData);
+      console.log("Created new user in database for Google sign-in");
+    } else {
+      // Update existing user data
+      const userData = {
+        lastLogin: serverTimestamp(),
+        photoURL: user.photoURL || snapshot.val().photoURL || '',
+        emailVerified: user.emailVerified
+      };
+      
+      await update(userRef, userData);
+      console.log("Updated existing user in database for Google sign-in");
     }
+    
+    return user;
+  } catch (error) {
+    console.error("Error processing Google user:", error);
+    throw error;
+  }
+};
+
+// Handle redirect result
+export const handleRedirectResult = async () => {
+  try {
+    console.log("Checking for redirect result...");
+    const result = await getRedirectResult(auth);
+    
+    if (result) {
+      // Process the user if we got a redirect result
+      await processGoogleUser(result.user);
+      
+      // Clear auth mode after successful sign-in
+      localStorage.removeItem('authMode');
+      
+      return result;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error("Error handling redirect result:", error);
+    
+    // Clear auth mode if there was an error
+    localStorage.removeItem('authMode');
     
     throw error;
   }
