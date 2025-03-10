@@ -296,8 +296,8 @@ export function ESP32Guide() {
                 <li>Update the firmware with your Firebase credentials:
                   <pre className="bg-gray-100 dark:bg-gray-800 p-3 rounded-md mt-2 overflow-x-auto text-sm">
                     <code>
-                      #define FIREBASE_HOST "your-project-id.firebaseio.com"<br/>
-                      #define FIREBASE_AUTH "your-database-secret"
+                      #define FIREBASE_HOST "catfeeder002117-default-rtdb.asia-southeast1.firebasedatabase.app"<br/>
+                      #define FIREBASE_AUTH "AIzaSyDFEVV0zXBXeZkzdcVz6sARU5pHxJL80N4"
                     </code>
                   </pre>
                 </li>

@@ -2,10 +2,10 @@
 
 // Configure Cloudinary
 const cloudinaryConfig = {
-  cloud_name: 'dgiip1hjs', // Replace with your cloud name
-  api_key: '661465737781545',       // Replace with your API key
-  api_secret: '0t4cPf1jVBoZuC0hSpEnGtC6zsw', // Replace with your API secret
-  secure: true                   // Use HTTPS
+  cloud_name: 'dgiip1hjs', // Your cloud name
+  api_key: '661465737781545', // Your API key
+  api_secret: '0t4cPf1jVBoZuC0hSpEnGtC6zsw', // Your API secret
+  secure: true // Use HTTPS
 };
 
 // Simple Cloudinary class implementation

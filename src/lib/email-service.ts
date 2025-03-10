@@ -94,7 +94,7 @@ export const sendEmail = async (params: EmailParams): Promise<{ success: boolean
  *       secure: false,
  *       auth: {
  *         user: '86739d001@smtp-brevo.com',
- *         pass: 'YOUR_BREVO_SMTP_PASSWORD'
+ *         pass: 'xsmtpsib-c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9-XYZ123abc'
  *       }
  *     });
  *     
