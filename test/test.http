@@ -1,5 +1,5 @@
-POST POST https://api-inference.huggingface.co/models/bigcode/starcoder
-Authorization: Bearer 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
+POST https://api-inference.huggingface.co/models/bigcode/starcoder
+Authorization: Bearer [YOUR_API_TOKEN_HERE]
 Content-Type: application/json
 
 {
