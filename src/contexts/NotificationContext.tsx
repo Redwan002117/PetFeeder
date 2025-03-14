@@ -1,7 +1,13 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { useAuth } from "@/contexts/AuthContext";
-import { requestNotificationPermission, saveUserFCMToken, onForegroundMessage, removeUserFCMToken } from "@/lib/firebase";
+import { useAuth } from "@/contexts/SupabaseAuthContext";
+import { 
+  requestNotificationPermission, 
+  saveUserNotificationPreferences, 
+  removeUserNotificationPreferences, 
+  onForegroundMessage 
+} from "@/lib/supabase-notifications";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from '@/lib/supabase-config';
 
 interface NotificationContextProps {
   notificationsEnabled: boolean;
@@ -26,83 +32,72 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
   useEffect(() => {
+    if (!currentUser) return;
+
     // Check if notifications are already enabled
-    if (Notification.permission === "granted") {
-      setNotificationsEnabled(true);
-    }
-  }, []);
+    const checkNotificationPreferences = async () => {
+      try {
+        const { data } = await supabase
+          .from('user_preferences')
+          .select('notifications_enabled')
+          .eq('user_id', currentUser.id)
+          .single();
 
-  useEffect(() => {
-    if (!currentUser || !notificationsEnabled) return;
+        setNotificationsEnabled(!!data?.notifications_enabled);
+      } catch (error) {
+        console.error("Error checking notification preferences:", error);
+      }
+    };
 
-    // Set up foreground message handler
+    checkNotificationPreferences();
+
+    // Subscribe to notifications
     const unsubscribe = onForegroundMessage((payload) => {
-      console.log('Received foreground message:', payload);
-      
-      // Show toast notification for foreground messages
-      toast({
-        title: payload.notification?.title || "New Notification",
-        description: payload.notification?.body || "",
-      });
+      if (payload.type === 'FEEDING_COMPLETE') {
+        toast({
+          title: "Feeding Complete",
+          description: payload.message,
+        });
+      }
     });
 
-    return () => unsubscribe();
-  }, [currentUser, notificationsEnabled, toast]);
+    return () => {
+      unsubscribe();
+    };
+  }, [currentUser, toast]);
 
   const requestPermission = async () => {
     if (!currentUser) return false;
-    
+
     try {
-      const token = await requestNotificationPermission();
-      
-      if (token) {
-        // Save the token to the user's profile
-        await saveUserFCMToken(currentUser.uid, token);
+      const permissionGranted = await requestNotificationPermission();
+      if (permissionGranted) {
+        await saveUserNotificationPreferences(currentUser.id, true);
         setNotificationsEnabled(true);
-        
-        toast({
-          title: "Notifications Enabled",
-          description: "You will now receive notifications for feeding events.",
-        });
-        
         return true;
-      } else {
-        toast({
-          title: "Notifications Disabled",
-          description: "You will not receive notifications. You can enable them in your browser settings.",
-          variant: "destructive",
-        });
-        
-        return false;
       }
+      return false;
     } catch (error) {
-      console.error("Error requesting notification permission:", error);
-      
-      toast({
-        title: "Error",
-        description: "Failed to enable notifications. Please try again.",
-        variant: "destructive",
-      });
-      
+      console.error('Error requesting notification permission:', error);
       return false;
     }
   };
 
   const disableNotifications = async () => {
     if (!currentUser) return;
-    
+
     try {
-      // Remove the FCM token from the user's profile
-      await removeUserFCMToken(currentUser.uid);
+      // Remove the notification preferences from the user's profile
+      await removeUserNotificationPreferences(currentUser.id);
       setNotificationsEnabled(false);
-      
+
       toast({
         title: "Notifications Disabled",
         description: "You will no longer receive notifications.",
       });
     } catch (error) {
       console.error("Error disabling notifications:", error);
-      
+
       toast({
         title: "Error",
         description: "Failed to disable notifications. Please try again.",
@@ -111,17 +106,17 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
   };
 
+  const value = {
+    notificationsEnabled,
+    requestPermission,
+    disableNotifications
+  };
+
   return (
-    <NotificationContext.Provider
-      value={{
-        notificationsEnabled,
-        requestPermission,
-        disableNotifications
-      }}
-    >
+    <NotificationContext.Provider value={value}>
       {children}
     </NotificationContext.Provider>
   );
 }
 
-export default NotificationProvider; 
+export default NotificationProvider;

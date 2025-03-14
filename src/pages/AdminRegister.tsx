@@ -6,10 +6,10 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { getDatabase, ref, set } from 'firebase/database';
-import { auth } from '@/lib/firebase';
+import { auth } from '@/lib/supabase';
 import { validateAdminKey } from '@/config/adminKey';
 import { Eye, EyeOff, Shield } from 'lucide-react';
+import { supabase } from '@/lib/supabaseClient';
 
 interface LocationState {
   email: string;
@@ -19,7 +19,6 @@ interface LocationState {
 }
 
 interface FirebaseError {
-  code: string;
   message: string;
 }
 
@@ -28,7 +27,6 @@ export default function AdminRegister() {
   const location = useLocation();
   const { toast } = useToast();
   const state = location.state as LocationState;
-  const db = getDatabase();
 
   const [adminKey, setAdminKey] = useState("");
   const [loading, setLoading] = useState(false);
@@ -58,15 +56,22 @@ export default function AdminRegister() {
         state.email,
         state.password
       );
+      // Save additional user data to Supabase
+      const { error } = await supabase
+        .from('profiles')
+        .insert([
+          {
+            id: userCredential.user.uid,
+            full_name: state.name,
+            username: state.username,
+            is_admin: true,
+            created_at: new Date().toISOString(),
+          },
+        ]);
 
-      // Save additional user data to Realtime Database
-      await set(ref(db, `users/${userCredential.user.uid}`), {
-        email: state.email,
-        name: state.name,
-        username: state.username,
-        role: 'admin',
-        createdAt: new Date().toISOString(),
-      });
+      if (error) {
+        throw error;
+      }
 
       toast({
         title: "Success",
@@ -195,4 +200,4 @@ export default function AdminRegister() {
       </div>
     </div>
   );
-} 
+}

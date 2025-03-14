@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/SupabaseAuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import { Slider } from "@/components/ui/slider";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { HandPlatter, Clock, PawPrint, Info } from "lucide-react";
-import { triggerManualFeed, getFeedingHistory, getDeviceStatus } from "@/lib/firebase";
+import { triggerManualFeed, getFeedingHistory, getDeviceStatus } from "@/lib/feeding-utils";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
@@ -23,75 +23,76 @@ const ManualFeed = () => {
   const [deviceStatus, setDeviceStatus] = useState<any>({});
 
   useEffect(() => {
-    if (currentUser) {
-      const unsubscribeHistory = getFeedingHistory(currentUser.uid, (data) => {
-        if (data) {
-          const historyArray = Object.keys(data).map(key => ({
-            id: key,
-            ...data[key]
-          }));
-          // Sort by timestamp (most recent first) and filter manual feeds only
-          const manualFeeds = historyArray
-            .filter(item => item.type === 'manual')
-            .sort((a, b) => b.timestamp - a.timestamp)
-            .slice(0, 5);
-          setFeedingHistory(manualFeeds);
-        } else {
-          setFeedingHistory([]);
-        }
-      });
+    if (!currentUser) return;
 
-      const unsubscribeStatus = getDeviceStatus(currentUser.uid, (data) => {
-        if (data) {
-          setDeviceStatus(data);
-        } else {
-          setDeviceStatus({});
-        }
-      });
-
-      return () => {
-        unsubscribeHistory();
-        unsubscribeStatus();
-      };
-    }
-  }, [currentUser]);
-
-  const handleFeedNow = async () => {
-    if (currentUser && !loading && !feeding) {
+    const fetchDeviceData = async () => {
       setLoading(true);
       try {
-        await triggerManualFeed(currentUser.uid, feedAmount);
-        
-        // Show feeding animation
-        setFeeding(true);
-        setProgress(0);
-        
-        const interval = setInterval(() => {
-          setProgress((prev) => {
-            if (prev >= 100) {
-              clearInterval(interval);
-              setFeeding(false);
-              return 0;
-            }
-            return prev + 5;
-          });
-        }, 150);
-        
-        toast({
-          title: "Feeding initiated",
-          description: `Dispensing ${feedAmount}g of food`,
-        });
+        const [history, status] = await Promise.all([
+          getFeedingHistory(currentUser.id),
+          getDeviceStatus(currentUser.id)
+        ]);
+
+        setFeedingHistory(history);
+        setDeviceStatus(status);
       } catch (error) {
-        console.error("Error triggering manual feed:", error);
+        console.error('Error fetching device data:', error);
         toast({
-          title: "Error",
-          description: "Failed to trigger feeding",
-          variant: "destructive",
+          title: 'Error',
+          description: 'Failed to fetch device data',
+          variant: 'destructive',
         });
-        setFeeding(false);
       } finally {
         setLoading(false);
       }
+    };
+
+    fetchDeviceData();
+
+    // Set up real-time subscription
+    const subscription = supabase
+      .channel('feeding_events')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'feeding_events',
+          filter: `device_id=eq.${currentUser.id}`
+        },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setFeedingHistory(current => [payload.new, ...current]);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [currentUser]);
+
+  const handleFeed = async () => {
+    if (!currentUser) return;
+
+    setFeeding(true);
+    try {
+      await triggerManualFeed(currentUser.id, portion);
+      
+      toast({
+        title: "Success",
+        description: `Dispensing ${portion}g of food`,
+      });
+    } catch (error) {
+      console.error("Error triggering feed:", error);
+      toast({
+        title: "Error",
+        description: "Failed to trigger feeding",
+        variant: "destructive",
+      });
+    } finally {
+      setFeeding(false);
     }
   };
 
@@ -145,7 +146,7 @@ const ManualFeed = () => {
             
             <Button 
               className="w-full h-16 text-lg bg-pet-primary hover:bg-pet-primary/90"
-              onClick={handleFeedNow}
+              onClick={handleFeed}
               disabled={loading || feeding || !deviceStatus.online}
             >
               <HandPlatter className="mr-2 h-6 w-6" />

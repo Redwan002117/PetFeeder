@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Pet Feeder Device Alert</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: #ff4444;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 5px;
+        }
+        .content {
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        .alert-box {
+            background-color: #fff3cd;
+            border: 1px solid #ffeeba;
+            color: #856404;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #4A90E2;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>⚠️ Device Alert</h1>
+    </div>
+    <div class="content">
+        <p>Hello {{userName}},</p>
+        
+        <div class="alert-box">
+            <p><strong>Alert Type:</strong> {{alertType}}</p>
+            <p><strong>Device Name:</strong> {{deviceName}}</p>
+            <p><strong>Time:</strong> {{alertTime}}</p>
+            <p><strong>Details:</strong> {{alertDetails}}</p>
+        </div>
+
+        <p>Please check your device and take necessary action. You can view more details and manage your device settings by clicking the button below:</p>
+
+        <p style="text-align: center;">
+            <a href="{{deviceLink}}" class="button">View Device Details</a>
+        </p>
+
+        <p>If you need assistance, please don't hesitate to contact our support team.</p>
+
+        <p>Best regards,<br>Your Pet Feeder Team</p>
+    </div>
+</body>
+</html>

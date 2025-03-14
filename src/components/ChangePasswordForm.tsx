@@ -1,10 +1,9 @@
-
 import React, { useState } from "react";
+import { useAuth } from "@/contexts/SupabaseAuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { updatePassword } from "@/lib/firebase";
-import { useAuth } from "@/contexts/AuthContext";
+import { updatePassword } from "@/lib/user-utils";
 import { useToast } from "@/hooks/use-toast";
 
 const ChangePasswordForm = () => {
@@ -17,6 +16,7 @@ const ChangePasswordForm = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentUser) return;
     
     if (newPassword !== confirmPassword) {
       toast({
@@ -39,16 +39,14 @@ const ChangePasswordForm = () => {
     setLoading(true);
     
     try {
-      if (currentUser) {
-        await updatePassword(currentUser, currentPassword, newPassword);
-        toast({
-          title: "Password updated",
-          description: "Your password has been changed successfully.",
-        });
-        setCurrentPassword("");
-        setNewPassword("");
-        setConfirmPassword("");
-      }
+      await updatePassword(newPassword);
+      toast({
+        title: "Password updated",
+        description: "Your password has been changed successfully.",
+      });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
     } catch (error: any) {
       toast({
         title: "Error",

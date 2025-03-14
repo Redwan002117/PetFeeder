@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/SupabaseAuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -11,8 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Bell, Volume2, VolumeX, Lock, AlertTriangle, Calendar, HandPlatter, Mail, Smartphone, Activity, XCircle, AlertCircle, Settings as SettingsIcon, Server, Key, Send, ShieldAlert, QrCode, LogOut } from "lucide-react";
 import NotificationSettings from "@/components/NotificationSettings";
 import ChangePasswordForm from "@/components/ChangePasswordForm";
-import { ref, update, get } from "firebase/database";
-import { database } from "@/lib/firebase";
+import { supabase } from "@/lib/supabase";
 import PageHeader from "@/components/PageHeader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -27,7 +26,7 @@ import {
   DialogClose
 } from "@/components/ui/dialog";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { safeGet, safeUpdate, safeSet, safeOnValue } from "@/lib/firebase-utils";
+import { safeGet, safeUpdate, safeSet, safeOnValue } from "@/lib/supabase-utils";
 import { Textarea } from "@/components/ui/textarea";
 import { useNavigate } from "react-router-dom";
 
@@ -111,6 +110,34 @@ const Settings = () => {
       title: newEmailNotifications ? "Email Notifications Enabled" : "Email Notifications Disabled",
       description: `You will ${newEmailNotifications ? "now" : "no longer"} receive email notifications.`,
     });
+  };
+
+  const updatePreferences = async (preferences: Partial<UserPreferences>) => {
+    if (!currentUser) return;
+    
+    try {
+      const { error } = await supabase
+        .from('user_preferences')
+        .update({
+          ...preferences,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', currentUser.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Preferences Updated",
+        description: "Your preferences have been saved successfully.",
+      });
+    } catch (error) {
+      console.error("Error updating preferences:", error);
+      toast({
+        title: "Update Failed",
+        description: "Failed to save preferences",
+        variant: "destructive",
+      });
+    }
   };
 
   // Function to set up real-time listeners for all data
@@ -418,6 +445,85 @@ const Settings = () => {
         description: "Failed to revoke session. Please try again.",
         variant: "destructive"
       });
+    }
+  };
+
+  const handleUpdateProfile = async () => {
+    if (!currentUser) return;
+
+    setUpdating(true);
+    try {
+      // Update profile in Supabase
+      const { error } = await supabase
+        .from('users')
+        .update({
+          display_name: displayName,
+          email: email,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', currentUser.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Profile Updated",
+        description: "Your profile has been updated successfully.",
+      });
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update profile. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentUser) return;
+
+    setUploadingPhoto(true);
+    try {
+      // Upload file to Supabase Storage
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${currentUser.id}-${Math.random()}.${fileExt}`;
+      const filePath = `avatars/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+      // Update user profile with new photo URL
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ avatar_url: publicUrl })
+        .eq('id', currentUser.id);
+
+      if (updateError) throw updateError;
+
+      toast({
+        title: "Photo Updated",
+        description: "Your profile photo has been updated successfully.",
+      });
+    } catch (error) {
+      console.error("Error uploading photo:", error);
+      toast({
+        title: "Upload Failed",
+        description: "Failed to upload photo. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingPhoto(false);
     }
   };
 
@@ -1040,4 +1146,4 @@ const Settings = () => {
   );
 };
 
-export default Settings; 
+export default Settings;

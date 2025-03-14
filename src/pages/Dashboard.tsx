@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/SupabaseAuthContext";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,11 +15,10 @@ import {
   PieChart
 } from "lucide-react";
 import { 
-  getFeedingSchedule, 
-  getDeviceStatus, 
+  getDashboardStats, 
   triggerManualFeed,
   getFeedingHistory
-} from "@/lib/firebase";
+} from "@/lib/dashboard-utils";
 import { format } from "date-fns";
 
 const Dashboard = () => {
@@ -28,59 +27,71 @@ const Dashboard = () => {
   const [deviceStatus, setDeviceStatus] = useState<any>({});
   const [feedingHistory, setFeedingHistory] = useState<any[]>([]);
   const [isFeeding, setIsFeeding] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [dashboardData, setDashboardData] = useState<any>({});
 
   useEffect(() => {
-    if (currentUser) {
-      const unsubscribeSchedule = getFeedingSchedule(currentUser.uid, (data) => {
-        if (data) {
-          const scheduleArray = Object.keys(data).map(key => ({
-            id: key,
-            ...data[key]
+    if (!currentUser) return;
+
+    const fetchDashboardData = async () => {
+      setLoading(true);
+      try {
+        const stats = await getDashboardStats(currentUser.id);
+        setDashboardData(stats);
+      } catch (error) {
+        console.error("Error fetching dashboard data:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load dashboard data",
+          variant: "destructive"
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+
+    // Set up real-time subscription
+    const subscription = supabase
+      .channel('dashboard_changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'feeding_events' },
+        (payload) => {
+          // Update dashboard data when new feeding events occur
+          setDashboardData(current => ({
+            ...current,
+            lastFeeding: payload.new
           }));
-          setSchedule(scheduleArray);
-        } else {
-          setSchedule([]);
         }
-      });
+      )
+      .subscribe();
 
-      const unsubscribeStatus = getDeviceStatus(currentUser.uid, (data) => {
-        if (data) {
-          setDeviceStatus(data);
-        } else {
-          setDeviceStatus({});
-        }
-      });
-
-      const unsubscribeHistory = getFeedingHistory(currentUser.uid, (data) => {
-        if (data) {
-          const historyArray = Object.keys(data).map(key => ({
-            id: key,
-            ...data[key]
-          }));
-          setFeedingHistory(historyArray.sort((a, b) => b.timestamp - a.timestamp).slice(0, 5));
-        } else {
-          setFeedingHistory([]);
-        }
-      });
-
-      return () => {
-        unsubscribeSchedule();
-        unsubscribeStatus();
-        unsubscribeHistory();
-      };
-    }
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [currentUser]);
 
-  const handleManualFeed = async () => {
-    if (currentUser && !isFeeding) {
-      setIsFeeding(true);
-      try {
-        await triggerManualFeed(currentUser.uid, 20); // 20g as default amount
-        setTimeout(() => setIsFeeding(false), 3000); // Reset after 3 seconds
-      } catch (error) {
-        console.error("Error triggering manual feed:", error);
-        setIsFeeding(false);
-      }
+  const handleManualFeed = async (amount: number) => {
+    if (!currentUser) return;
+
+    setFeeding(true);
+    try {
+      await triggerManualFeed(currentUser.id, amount);
+      toast({
+        title: "Success",
+        description: `Dispensing ${amount}g of food`,
+      });
+    } catch (error) {
+      console.error("Error triggering feed:", error);
+      toast({
+        title: "Error",
+        description: "Failed to trigger feeding",
+        variant: "destructive"
+      });
+    } finally {
+      setFeeding(false);
     }
   };
 
@@ -182,7 +193,7 @@ const Dashboard = () => {
                 <Button 
                   className="w-full bg-pet-primary hover:bg-pet-primary/90 h-16"
                   disabled={isFeeding || !deviceStatus.online}
-                  onClick={handleManualFeed}
+                  onClick={() => handleManualFeed(20)} // 20g as default amount
                 >
                   <HandPlatter className="mr-2 h-6 w-6" />
                   {isFeeding ? "Dispensing Food..." : "Feed Now"}

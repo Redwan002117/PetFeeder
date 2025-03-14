@@ -20,10 +20,11 @@ import Settings from './pages/Settings';
 import FoodLevels from './pages/FoodLevels';
 import PetProfiles from './pages/PetProfiles';
 import ProtectedRoute from './components/ProtectedRoute';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider } from './contexts/SupabaseAuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { DeviceProvider } from './contexts/DeviceContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { SupabaseAuthProvider } from './contexts/SupabaseAuthContext';
 import { useEffect } from 'react';
 
 export function App() {
@@ -41,7 +42,7 @@ export function App() {
 
   return (
     <ThemeProvider>
-      <AuthProvider>
+      <SupabaseAuthProvider>
         <NotificationProvider>
           <DeviceProvider>
             <Router>
@@ -123,7 +124,7 @@ export function App() {
             </Router>
           </DeviceProvider>
         </NotificationProvider>
-      </AuthProvider>
+      </SupabaseAuthProvider>
     </ThemeProvider>
   );
 }

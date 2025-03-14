@@ -1,16 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
-import { updateProfile } from 'firebase/auth';
 import { FaUser } from "react-icons/fa";
 import { Loader2, User } from "lucide-react";
-import { database, ref, set, get, update } from '@/lib/firebase';
-import { serverTimestamp } from 'firebase/database';
+import { supabase } from '@/lib/supabase';
 import PageHeader from "@/components/PageHeader";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -55,16 +53,17 @@ const UsernameSetup = () => {
     // Check if user already has a username in the database
     const checkExistingUsername = async () => {
       try {
-        const userRef = ref(database, `users/${currentUser.uid}`);
-        const snapshot = await get(userRef);
-        
-        if (snapshot.exists()) {
-          const userData = snapshot.val();
-          if (userData.username) {
-            console.log("User already has a username, redirecting to dashboard");
-            // User already has a username, redirect to dashboard
-            navigate('/dashboard');
-          }
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('username')
+          .eq('id', currentUser.id);
+
+        if (error) throw error;
+
+        if (data && data.length > 0 && data[0].username) {
+          console.log("User already has a username, redirecting to dashboard");
+          // User already has a username, redirect to dashboard
+          navigate('/dashboard');
         }
       } catch (error) {
         console.error("Error checking existing username:", error);
@@ -76,97 +75,63 @@ const UsernameSetup = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!currentUser) {
-      navigate('/login');
-      return;
-    }
-    
+    if (!currentUser) return;
+
     try {
       setLoading(true);
       setError('');
-      
+
       // Validate username
       if (!username) {
         setError("Username is required");
         return;
       }
-      
+
       if (username.length < 3) {
         setError("Username must be at least 3 characters long");
         return;
       }
-      
+
       if (!/^[a-zA-Z0-9_]+$/.test(username)) {
         setError("Username can only contain letters, numbers, and underscores");
         return;
       }
-      
+
       // Check if username is already taken
-      const usersRef = ref(database, 'users');
-      const snapshot = await get(usersRef);
-      
-      if (snapshot.exists()) {
-        let usernameTaken = false;
-        snapshot.forEach((childSnapshot) => {
-          const userData = childSnapshot.val();
-          if (userData.username === username && childSnapshot.key !== currentUser.uid) {
-            usernameTaken = true;
-            return true; // Break the forEach loop
-          }
-        });
-        
-        if (usernameTaken) {
-          setError("Username is already taken. Please choose a different username.");
-          return;
-        }
+      const { data, error: fetchError } = await supabase
+        .from('profiles')
+        .select('username')
+        .neq('id', currentUser.id);
+
+      if (fetchError) throw fetchError;
+
+      if (data && data.some(user => user.username === username)) {
+        setError("Username is already taken. Please choose a different username.");
+        return;
       }
-      
+
       // Update user profile with the provided username
-      await updateProfile(currentUser, {
-        displayName: name || username
-      });
-      
-      // Create or update user data in the database
-      const userRef = ref(database, `users/${currentUser.uid}`);
-      const userSnapshot = await get(userRef);
-      
-      if (!userSnapshot.exists()) {
-        // Create new user data
-        const userData = {
-          email: currentUser.email,
+      const { error } = await supabase
+        .from('profiles')
+        .update({
           username: username,
-          displayName: name || username,
-          role: 'user',
-          permissions: {
-            canFeed: true,
-            canSchedule: true,
-            canViewStats: true
-          },
-          createdAt: serverTimestamp(),
-          provider: currentUser.providerData[0]?.providerId || 'unknown'
-        };
-        
-        // Save user data to database
-        await set(userRef, userData);
-      } else {
-        // Update existing user data with new username
-        await update(userRef, {
-          username: username,
-          displayName: name || username
-        });
-      }
-      
+          full_name: name,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', currentUser.id);
+
+      if (error) throw error;
+
       // Show success message
       toast({
         title: "Profile updated",
         description: "Your username has been set successfully",
         variant: "default",
       });
-      
+
       // Redirect to dashboard
       navigate('/dashboard');
-      
+
     } catch (error: any) {
       console.error("Error setting username:", error);
       setError(error.message || "Failed to set username");
@@ -258,4 +223,4 @@ const UsernameSetup = () => {
   );
 };
 
-export default UsernameSetup; 
+export default UsernameSetup;

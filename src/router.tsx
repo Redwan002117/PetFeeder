@@ -1,5 +1,5 @@
 import { BrowserRouter, HashRouter, Routes, Route } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
+import { Toaster } from "sonner";
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -20,7 +20,7 @@ import Settings from './pages/Settings';
 import FoodLevels from './pages/FoodLevels';
 import PetProfiles from './pages/PetProfiles';
 import ProtectedRoute from './components/ProtectedRoute';
-import { AuthProvider } from './contexts/AuthContext';
+import { SupabaseAuthProvider } from './contexts/SupabaseAuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { DeviceProvider } from './contexts/DeviceContext';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -45,7 +45,7 @@ export function AppRouter() {
 
   return (
     <ThemeProvider>
-      <AuthProvider>
+      <SupabaseAuthProvider>
         <NotificationProvider>
           <DeviceProvider>
             <Router>
@@ -127,12 +127,12 @@ export function AppRouter() {
                   {/* 404 route */}
                   <Route path="*" element={<NotFound />} />
                 </Routes>
-                <Toaster position="top-right" />
+                <Toaster richColors position="top-right" />
               </div>
             </Router>
           </DeviceProvider>
         </NotificationProvider>
-      </AuthProvider>
+      </SupabaseAuthProvider>
     </ThemeProvider>
   );
-} 
+}

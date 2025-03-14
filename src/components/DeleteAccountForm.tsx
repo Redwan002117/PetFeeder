@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
-import { deleteUserAccount } from "@/lib/firebase";
+import { useAuth } from "@/contexts/SupabaseAuthContext";
+import { deleteUserAccount } from "@/lib/user-utils";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,22 +17,34 @@ const DeleteAccountForm = () => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
 
-  const handleDeleteAccount = async () => {
+  const handleDeleteAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!currentUser) return;
-    
-    setLoading(true);
-    try {
-      await deleteUserAccount(currentUser, password);
-      toast({
-        title: "Account Deleted",
-        description: "Your account has been permanently deleted.",
-      });
-      navigate("/login");
-    } catch (error: any) {
+
+    if (confirmText !== 'DELETE') {
       toast({
         title: "Error",
-        description: error.message || "Failed to delete account. Please check your password and try again.",
+        description: "Please type DELETE to confirm account deletion",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await deleteUserAccount(password);
+      toast({
+        title: "Account Deleted",
+        description: "Your account has been successfully deleted.",
+      });
+      navigate('/');
+    } catch (error: any) {
+      console.error("Error deleting account:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete account",
         variant: "destructive",
       });
     } finally {
@@ -78,16 +90,21 @@ const DeleteAccountForm = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
+                <Label htmlFor="confirmText">Type DELETE to confirm</Label>
+                <Input
+                  id="confirmText"
+                  type="text"
+                  placeholder="Type DELETE"
+                  value={confirmText}
+                  onChange={(e) => setConfirmText(e.target.value)}
+                />
               </div>
             </div>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction
-                onClick={(e) => {
-                  e.preventDefault();
-                  handleDeleteAccount();
-                }}
-                disabled={loading || !password}
+                onClick={handleDeleteAccount}
+                disabled={loading || !password || confirmText !== 'DELETE'}
                 className="bg-destructive hover:bg-destructive/90"
               >
                 {loading ? "Deleting..." : "Delete Account"}
@@ -100,4 +117,4 @@ const DeleteAccountForm = () => {
   );
 };
 
-export default DeleteAccountForm; 
+export default DeleteAccountForm;

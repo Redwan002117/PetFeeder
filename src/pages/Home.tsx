@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Layout from '@/components/Layout';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { Mail, Github, Linkedin, Heart, PawPrint, CheckCircle, ArrowRight, Clock, Bell, Shield, Smartphone } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import ProfileAvatar from '@/components/ProfileAvatar';
 import { motion } from 'framer-motion';
-import { getDeviceStatus, getDevices, getLastFeeding } from '@/lib/firebase';
+import { getDeviceStatus, getDevices, getLastFeeding } from '@/lib/home-utils';
+import { toast } from "sonner";
 
 function Home() {
   const { currentUser } = useAuth();
@@ -56,64 +57,53 @@ function Home() {
     if (!currentUser) return;
 
     const fetchDeviceData = async () => {
+      setLoading(true);
       try {
-        setDeviceLoading(true);
-        
-        // Try to get the user's devices
-        const devices = await getDevices(currentUser.uid).catch(() => null);
-        
-        if (devices && Object.keys(devices).length > 0) {
-          const deviceId = Object.keys(devices)[0];
-          
-          // Get device status
-          const unsubscribe = getDeviceStatus(deviceId, (status) => {
-            setDeviceStatus(status || {
-              isOnline: false,
-              foodLevel: 0,
-              lastActive: new Date().toISOString()
-            });
-          });
-          
-          // Get last feeding
-          try {
-            const lastFeedingData = await getLastFeeding(deviceId);
-            setLastFeeding(lastFeedingData);
-            
-            // Calculate next scheduled feeding (mock data for now)
-            const now = new Date();
-            const nextFeeding = new Date(now);
-            nextFeeding.setHours(18, 0, 0, 0); // 6:00 PM
-            
-            if (nextFeeding < now) {
-              nextFeeding.setDate(nextFeeding.getDate() + 1);
-            }
-            
-            setNextScheduledFeeding(nextFeeding.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-            
-            // Set scheduled feedings count (mock data)
-            setScheduledFeedings(3);
-          } catch (error) {
-            console.error("Error fetching feeding data:", error);
-          }
-          
-          return () => unsubscribe();
-        } else {
-          // No devices found, set default values
-          setDeviceStatus({
-            isOnline: false,
-            foodLevel: 0,
-            lastActive: new Date().toISOString()
-          });
+        const devices = await getDevices(currentUser.id);
+        setDevices(devices);
+
+        if (devices.length > 0) {
+          const status = await getDeviceStatus(devices[0].id);
+          const lastFeeding = await getLastFeeding(devices[0].id);
+          setDeviceStatus(status);
+          setLastFeeding(lastFeeding);
         }
       } catch (error) {
-        console.error("Error fetching device data:", error);
+        console.error('Error fetching device data:', error);
+        toast.error('Failed to fetch device data');
       } finally {
-        setDeviceLoading(false);
+        setLoading(false);
       }
     };
-    
+
     fetchDeviceData();
-  }, [currentUser]);
+
+    // Set up real-time subscription
+    const subscription = supabase
+      .channel('device_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'devices',
+          filter: `user_id=eq.${currentUser.id}`
+        },
+        (payload) => {
+          // Update device data when changes occur
+          setDevices(current => 
+            current.map(device => 
+              device.id === payload.new.id ? { ...device, ...payload.new } : device
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [currentUser, toast]);
 
   // Format the last active time
   const formatLastActive = (timestamp: string) => {
@@ -760,4 +750,4 @@ function Home() {
   );
 }
 
-export default Home; 
+export default Home;

@@ -85,11 +85,11 @@ export function ESP32Guide() {
           </Button>
           <Button 
             variant="ghost" 
-            className={`w-full justify-start ${activeSection === 'firebase-integration' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
-            onClick={() => scrollToSection('firebase-integration')}
+            className={`w-full justify-start ${activeSection === 'supabase-integration' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => scrollToSection('supabase-integration')}
           >
             <Database className="mr-2 h-4 w-4" />
-            Firebase Integration
+            Supabase Integration
           </Button>
           <Button 
             variant="ghost" 
@@ -297,10 +297,11 @@ export function ESP32Guide() {
                   <pre className="bg-gray-100 dark:bg-gray-800 p-3 rounded-md mt-2 overflow-x-auto text-sm">
                     <code>
                       #define FIREBASE_HOST "catfeeder002117-default-rtdb.asia-southeast1.firebasedatabase.app"<br/>
-                      #define FIREBASE_AUTH "AIzaSyDFEVV0zXBXeZkzdcVz6sARU5pHxJL80N4"
+                      #define FIREBASE_AUTH "YOUR_FIREBASE_AUTH_KEY" // Replace with a secure method to retrieve the key
                     </code>
                   </pre>
                 </li>
+
               </ol>
 
               <h4 className="text-md font-semibold mt-4">Database Structure</h4>
@@ -464,4 +465,4 @@ export function ESP32Guide() {
       </Accordion>
     </div>
   );
-} 
+}

@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/SupabaseAuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Pencil, Upload, AlertCircle, Shield, Mail, CheckCircle, User as UserIcon, Lock, AlertTriangle, Info, Loader2 } from "lucide-react";
@@ -9,18 +9,18 @@ import { useToast } from "@/components/ui/use-toast";
 import ChangePasswordForm from "@/components/ChangePasswordForm";
 import DeleteAccountForm from "@/components/DeleteAccountForm";
 import NotificationSettings from "@/components/NotificationSettings";
-import { uploadProfilePicture, database } from "@/lib/firebase";
-import { safeRef, safeUpdate, safeServerTimestamp } from "@/lib/firebase-utils";
+import { uploadProfilePicture } from "@/lib/media-utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import ProfileAvatar from "@/components/ProfileAvatar";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { getCloudinaryUploadUrl, getCloudinaryUploadSignature } from '@/lib/cloudinary';
 import { Badge } from "@/components/ui/badge";
-import { updateProfile, sendEmailVerification } from "firebase/auth";
 import PageHeader from "@/components/PageHeader";
 import { sendAdminRequestEmail } from "@/services/email-service";
 import ImageCropper from "@/components/ImageCropper";
+import { updateUserProfile, sendVerificationEmail } from "@/lib/user-utils";
+import { supabase } from '@/lib/supabase';
 
 // Add a type extension for the User type to include isAdmin property
 interface UserWithAdmin {
@@ -65,14 +65,7 @@ const Profile = () => {
       
       // Update the user's profile
       if (currentUser) {
-        await updateProfile(currentUser, { photoURL });
-        
-        // Update the user's profile in the database
-        const userRef = safeRef(database, `users/${currentUser.uid}`);
-        await safeUpdate(userRef, {
-          photoURL,
-          updatedAt: safeServerTimestamp()
-        });
+        await updateUserProfile(currentUser.id, { photoURL });
         
         toast({
           title: "Profile Updated",
@@ -189,48 +182,92 @@ const Profile = () => {
     setAdminRequestLoading(true);
     
     try {
-      // Create the approval and denial URLs
-      const baseUrl = window.location.origin;
-      const approveUrl = `${baseUrl}/admin?action=approve&userId=${currentUser.uid}`;
-      const denyUrl = `${baseUrl}/admin?action=deny&userId=${currentUser.uid}`;
+      const { error } = await supabase
+        .from('admin_requests')
+        .insert({
+          user_id: currentUser.id,
+          status: 'pending',
+          created_at: new Date().toISOString()
+        });
+
+      if (error) throw error;
       
-      // Update the database to mark the request as pending using safe utilities
-      const success = await safeUpdate(`users/${currentUser.uid}`, {
-        adminRequestStatus: 'pending',
-        adminRequestDate: safeServerTimestamp()
+      const emailResult = await sendAdminRequestEmail({
+        displayName: currentUser.user_metadata.name || 'Unknown User',
+        email: currentUser.email || 'no-email@example.com',
+        uid: currentUser.id
       });
       
-      if (!success) {
-        throw new Error("Failed to update database");
-      }
-      
-      // Send the admin request email
-      const userData = {
-        displayName: currentUser.displayName || 'Unknown User',
-        email: currentUser.email || 'no-email@example.com',
-        uid: currentUser.uid
-      };
-      
-      const emailResult = await sendAdminRequestEmail(userData, approveUrl, denyUrl);
-      
-      if (emailResult.success) {
-        toast({
-          title: "Request Sent",
-          description: "Your admin access request has been sent successfully.",
-        });
-        setAdminRequestSent(true);
-      } else {
-        throw new Error(emailResult.error || "Failed to send email");
-      }
+      if (!emailResult.success) throw new Error(emailResult.error);
+
+      toast({
+        title: "Request Sent",
+        description: "Your admin access request has been sent successfully.",
+      });
+      setAdminRequestSent(true);
     } catch (error: any) {
       console.error("Error requesting admin access:", error);
       toast({
         title: "Request Failed",
-        description: error.message || "Failed to request admin access. Please try again later.",
+        description: error.message || "Failed to request admin access",
         variant: "destructive",
       });
     } finally {
       setAdminRequestLoading(false);
+    }
+  };
+
+  const handleUpdateProfile = async () => {
+    if (!currentUser) return;
+
+    setUpdating(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          full_name: displayName,
+          avatar_url: photoURL,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', currentUser.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Profile Updated",
+        description: "Your profile has been updated successfully.",
+      });
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      toast({
+        title: "Update Failed",
+        description: "Failed to update profile",
+        variant: "destructive",
+      });
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleVerifyEmail = async () => {
+    if (!currentUser?.email) return;
+
+    setVerifying(true);
+    try {
+      await sendVerificationEmail();
+      toast({
+        title: "Verification Email Sent",
+        description: "Please check your email to verify your account.",
+      });
+    } catch (error) {
+      console.error("Error sending verification:", error);
+      toast({
+        title: "Verification Failed",
+        description: "Failed to send verification email",
+        variant: "destructive",
+      });
+    } finally {
+      setVerifying(false);
     }
   };
 

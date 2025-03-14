@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { database } from '@/lib/firebase';
-import { safeRef, safeGet } from '@/lib/firebase-utils';
+import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, BarChart2, Users, Server, AlertTriangle, PawPrint } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
@@ -38,110 +37,19 @@ export const Analytics: React.FC = () => {
   const { toast } = useToast();
 
   useEffect(() => {
+    const fetchAnalytics = async () => {
+      const { data, error } = await supabase
+        .from('analytics')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setData(data);
+    };
+
     fetchAnalytics();
   }, [timeRange]);
 
-  const fetchAnalytics = async () => {
-    try {
-      setLoading(true);
-
-      // Calculate time range
-      const now = new Date();
-      let startTime = new Date();
-      switch (timeRange) {
-        case '24h':
-          startTime.setDate(now.getDate() - 1);
-          break;
-        case '7d':
-          startTime.setDate(now.getDate() - 7);
-          break;
-        case '30d':
-          startTime.setDate(now.getDate() - 30);
-          break;
-        case '90d':
-          startTime.setDate(now.getDate() - 90);
-          break;
-      }
-      const startTimestamp = startTime.getTime();
-
-      // Fetch users
-      const usersSnapshot = await safeGet('users');
-      const usersData = usersSnapshot && usersSnapshot.exists() ? usersSnapshot.val() : {};
-      const users = Object.values(usersData || {});
-      
-      // Fetch devices
-      const devicesSnapshot = await safeGet('devices');
-      const devicesData = devicesSnapshot && devicesSnapshot.exists() ? devicesSnapshot.val() : {};
-      const devices = Object.values(devicesData || {});
-      
-      // Fetch feedings
-      const feedingsSnapshot = await safeGet('feedings');
-      const feedingsData = feedingsSnapshot && feedingsSnapshot.exists() ? feedingsSnapshot.val() : {};
-      const feedings = Object.values(feedingsData || {})
-        .filter((feeding: any) => feeding.timestamp > startTimestamp);
-      
-      // Calculate analytics
-      const totalUsers = users.length;
-      const activeUsers = users.filter((user: any) => user.lastLogin > startTimestamp).length;
-      const totalDevices = devices.length;
-      const activeDevices = devices.filter((device: any) => device.lastSeen > startTimestamp).length;
-      const totalFeedings = feedings.length;
-      
-      // Calculate average food level
-      const foodLevels = devices.map((device: any) => device.foodLevel || 0);
-      const averageFoodLevel = foodLevels.length > 0 
-        ? foodLevels.reduce((sum: number, level: number) => sum + level, 0) / foodLevels.length 
-        : 0;
-      
-      // Count device issues
-      const deviceIssues = devices.filter((device: any) => 
-        device.status === 'error' || device.status === 'maintenance'
-      ).length;
-      
-      // Calculate feedings by hour
-      const feedingsByHour = Array(24).fill(0);
-      feedings.forEach((feeding: any) => {
-        const hour = new Date(feeding.timestamp).getHours();
-        feedingsByHour[hour]++;
-      });
-      
-      // Calculate user growth
-      const usersByDate: Record<string, number> = {};
-      users.forEach((user: any) => {
-        if (user.createdAt && user.createdAt > startTimestamp) {
-          const date = new Date(user.createdAt).toISOString().split('T')[0];
-          usersByDate[date] = (usersByDate[date] || 0) + 1;
-        }
-      });
-      
-      const userGrowth = Object.entries(usersByDate)
-        .map(([date, count]) => ({ date, count }))
-        .sort((a, b) => a.date.localeCompare(b.date));
-      
-      // Update state with calculated data
-      setData({
-        totalUsers,
-        activeUsers,
-        totalDevices,
-        activeDevices,
-        totalFeedings,
-        averageFoodLevel,
-        deviceIssues,
-        feedingsByHour,
-        userGrowth
-      });
-    } catch (error) {
-      console.error("Error fetching analytics:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load analytics data. Please try again later.",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-  
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -227,4 +135,4 @@ export const Analytics: React.FC = () => {
       </div>
     </div>
   );
-}; 
+};

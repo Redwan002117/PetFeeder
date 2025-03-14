@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/SupabaseAuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { HandPlatter, Mail, Lock, Loader2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
-import { useToast } from "@/components/ui/use-toast";
-import { signIn, handleRedirectResult } from "@/lib/firebase";
+import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { supabase } from '@/lib/supabase-config';
 
 const Login = () => {
   const [emailOrUsername, setEmailOrUsername] = useState("");
@@ -17,7 +17,7 @@ const Login = () => {
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const { login, currentUser } = useAuth();
+  const { signIn: login, user: currentUser } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
@@ -32,68 +32,89 @@ const Login = () => {
   }, [location]);
 
   useEffect(() => {
-    // Check if there's a redirect result from Google authentication
-    const checkRedirectResult = async () => {
+    const checkSession = async () => {
       try {
-        console.log("Login page: Checking for redirect result");
-        const result = await handleRedirectResult();
-        console.log("Redirect result:", result);
+        const { data: { session }, error } = await supabase.auth.getSession();
         
-        if (result.success) {
-          // If successful login, show success message and redirect
+        if (error) {
           toast({
-            title: "Login Successful",
-            description: "You have been successfully logged in.",
-            variant: "default",
-          });
-          
-          // Redirect to username setup if new user, otherwise to dashboard
-          if (result.newUser) {
-            navigate("/username-setup");
-          } else {
-            navigate("/dashboard");
-          }
-        } else if (result.error) {
-          // Show error message if there was an error
-          toast({
-            title: "Login Failed",
-            description: result.error,
+            title: "Error",
+            description: error.message,
             variant: "destructive",
           });
+          return;
         }
-      } catch (error) {
-        console.error("Error checking redirect result:", error);
+
+        if (session) {
+          navigate('/dashboard');
+        }
+      } catch (error: any) {
+        console.error("Error checking session:", error);
+        toast({
+          title: "Error",
+          description: "Failed to check login status",
+          variant: "destructive",
+        });
       }
     };
-    
-    // Check if user is already logged in
-    if (currentUser) {
-      console.log("User already logged in:", currentUser);
-      navigate("/dashboard");
-      return;
-    }
-    
-    checkRedirectResult();
-  }, [navigate, toast, currentUser]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+    checkSession();
+  }, [navigate, toast]);
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    setLoading(true);
+    setError("");
+
     try {
-      setError("");
-      setLoading(true);
-      await login(emailOrUsername, password);
-      toast({
-        title: "Login Successful",
-        description: "You have been successfully logged in.",
-        variant: "default",
-      });
-      navigate("/dashboard");
+      // Check if input is an email or username
+      const isEmail = emailOrUsername.includes('@');
+      
+      let authResponse;
+      
+      if (isEmail) {
+        // If it's an email, use it directly
+        authResponse = await supabase.auth.signInWithPassword({
+          email: emailOrUsername,
+          password: password,
+        });
+      } else {
+        // If it's a username, first query the profiles table to get the user id
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('username', emailOrUsername)
+          .single();
+          
+        if (profileError) {
+          throw new Error('Username not found. Please check your credentials.');
+        }
+        
+        // Get the user's email from auth.users using the id from profiles
+        const { data: userData, error: userError } = await supabase.auth.admin.getUserById(profileData.id);
+        
+        if (userError || !userData) {
+          throw new Error('Could not retrieve user information. Please try again.');
+        }
+        
+        authResponse = await supabase.auth.signInWithPassword({
+          email: userData.user.email,
+          password: password,
+        });
+      }
+      
+      const { data, error } = authResponse;
+
+      if (error) throw error;
+
+      if (data?.session) {
+        navigate('/dashboard');
+      }
     } catch (error: any) {
-      setError(error.message || "Failed to sign in");
+      setError(error.message);
       toast({
-        title: "Login Failed",
-        description: "Failed to log in. Please check your credentials.",
+        title: "Error",
+        description: error.message,
         variant: "destructive",
       });
     } finally {
@@ -129,7 +150,7 @@ const Login = () => {
                 <AlertDescription>{successMessage}</AlertDescription>
               </Alert>
             )}
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleLogin} className="space-y-5">
               <div className="space-y-3">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">

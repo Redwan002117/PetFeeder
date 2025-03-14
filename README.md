@@ -132,3 +132,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Support
 
 For support, email support@petfeeder.com or join our Slack channel.
+
+## Authentication
+This project uses Supabase Authentication for managing users and sessions. To set up authentication:
+
+1. Create a Supabase project
+2. Copy your project URL and anon key
+3. Update your environment variables

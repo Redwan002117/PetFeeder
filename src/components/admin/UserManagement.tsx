@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { database } from '@/lib/firebase';
-import { safeRef, safeGet, safeUpdate, safeRemove } from '@/lib/firebase-utils';
+import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, Users, UserPlus, Trash2, Shield, PawPrint } from "lucide-react";
@@ -9,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import PageHeader from "@/components/PageHeader";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/SupabaseAuthContext";
 import ProfileAvatar from "@/components/ProfileAvatar";
 
 interface User {
@@ -43,58 +42,19 @@ export const UserManagement: React.FC = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*, auth.users!inner(*)')
+        .order('is_admin', { ascending: false })
+        .order('full_name', { ascending: true });
 
-      // Use safeRef instead of ref
-      const usersRef = safeRef('users');
-      
-      if (!usersRef) {
-        setUsers([]);
-        setLoading(false);
-        return;
-      }
-
-      // Use safeGet instead of get
-      const usersSnapshot = await safeGet('users');
-
-      if (!usersSnapshot || !usersSnapshot.exists()) {
-        setUsers([]);
-        setLoading(false);
-        return;
-      }
-
-      const usersData = usersSnapshot.val();
-
-      // Convert to array and add id
-      const usersArray = Object.keys(usersData).map(key => ({
-        id: key,
-        ...usersData[key],
-        // Set default values for missing properties
-        displayName: usersData[key].displayName || 'Unknown User',
-        role: usersData[key].role || 'user',
-        createdAt: usersData[key].createdAt || 0,
-        lastLogin: usersData[key].lastLogin || 0,
-        isActive: usersData[key].isActive !== false, // Default to true
-        permissions: usersData[key].permissions || {
-          canSchedule: true,
-          canFeed: true,
-          canViewStats: true,
-          canManageDevices: false
-        }
-      }));
-
-      // Sort by role (admin first) then by name
-      usersArray.sort((a, b) => {
-        if (a.role === 'admin' && b.role !== 'admin') return -1;
-        if (a.role !== 'admin' && b.role === 'admin') return 1;
-        return a.displayName.localeCompare(b.displayName);
-      });
-
-      setUsers(usersArray);
+      if (error) throw error;
+      setUsers(data || []);
     } catch (error) {
       console.error("Error fetching users:", error);
       toast({
         title: "Error",
-        description: "Failed to load users. Please try again later.",
+        description: "Failed to load users",
         variant: "destructive"
       });
     } finally {
@@ -114,30 +74,27 @@ export const UserManagement: React.FC = () => {
         return;
       }
 
-      // Use safeUpdate instead of update
-      const success = await safeUpdate(`users/${userId}/permissions`, {
-        [permission]: value
+      const { error } = await supabase
+        .from('user_permissions')
+        .upsert({ 
+          user_id: userId,
+          [permission]: value,
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) throw error;
+
+      // Update local state
+      setUsers(users.map(user => 
+        user.id === userId 
+          ? { ...user, permissions: { ...user.permissions, [permission]: value } } 
+          : user
+      ));
+
+      toast({
+        title: "Permission Updated",
+        description: `User permission has been updated successfully.`,
       });
-
-      if (success) {
-        // Update local state
-        setUsers(users.map(user => 
-          user.id === userId 
-            ? { ...user, permissions: { ...user.permissions, [permission]: value } } 
-            : user
-        ));
-
-        toast({
-          title: "Permission Updated",
-          description: `User permission has been updated successfully.`,
-        });
-      } else {
-        toast({
-          title: "Update Failed",
-          description: "Failed to update user permission. Please try again.",
-          variant: "destructive"
-        });
-      }
     } catch (error) {
       console.error("Error updating permission:", error);
       toast({
@@ -160,30 +117,24 @@ export const UserManagement: React.FC = () => {
         return;
       }
 
-      // Use safeUpdate instead of update
-      const success = await safeUpdate(`users/${userId}`, {
-        role: newRole
+      const { error } = await supabase
+        .from('profiles')
+        .update({ is_admin: newRole === 'admin' })
+        .eq('id', userId);
+
+      if (error) throw error;
+
+      // Update local state
+      setUsers(users.map(user => 
+        user.id === userId 
+          ? { ...user, role: newRole } 
+          : user
+      ));
+
+      toast({
+        title: "Role Updated",
+        description: `User role has been updated to ${newRole}.`,
       });
-
-      if (success) {
-        // Update local state
-        setUsers(users.map(user => 
-          user.id === userId 
-            ? { ...user, role: newRole } 
-            : user
-        ));
-
-        toast({
-          title: "Role Updated",
-          description: `User role has been updated to ${newRole}.`,
-        });
-      } else {
-        toast({
-          title: "Update Failed",
-          description: "Failed to update user role. Please try again.",
-          variant: "destructive"
-        });
-      }
     } catch (error) {
       console.error("Error updating role:", error);
       toast({
@@ -209,24 +160,20 @@ export const UserManagement: React.FC = () => {
         return;
       }
 
-      // Use safeRemove instead of remove
-      const success = await safeRemove(`users/${deleteUserId}`);
+      const { error } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', deleteUserId);
 
-      if (success) {
-        // Update local state
-        setUsers(users.filter(user => user.id !== deleteUserId));
+      if (error) throw error;
 
-        toast({
-          title: "User Deleted",
-          description: "User has been deleted successfully.",
-        });
-      } else {
-        toast({
-          title: "Deletion Failed",
-          description: "Failed to delete user. Please try again.",
-          variant: "destructive"
-        });
-      }
+      // Update local state
+      setUsers(users.filter(user => user.id !== deleteUserId));
+
+      toast({
+        title: "User Deleted",
+        description: "User has been deleted successfully.",
+      });
     } catch (error) {
       console.error("Error deleting user:", error);
       toast({
@@ -244,41 +191,25 @@ export const UserManagement: React.FC = () => {
     return new Date(timestamp).toLocaleString();
   };
 
-  // Setup real-time updates for user login status
   useEffect(() => {
-    const usersRef = safeRef('users');
-    
-    // Set up a listener for changes to the users node
-    const unsubscribe = safeGet('users').then((snapshot) => {
-      if (snapshot.exists()) {
-        // Set up individual listeners for each user's lastLogin
-        Object.keys(snapshot.val()).forEach((userId) => {
-          const userLoginRef = safeRef(`users/${userId}/lastLogin`);
-          
-          // Listen for changes to lastLogin
-          const onLoginChange = (snapshot: any) => {
-            if (snapshot.exists()) {
-              const lastLogin = snapshot.val();
-              
-              // Update the user in our local state
-              setUsers(prevUsers => 
-                prevUsers.map(user => 
-                  user.id === userId ? { ...user, lastLogin } : user
-                )
-              );
-            }
-          };
-          
-          // Attach the listener
-          safeGet(userLoginRef).then(onLoginChange);
-        });
-      }
-    });
-    
-    // Clean up the listeners when the component unmounts
+    const subscription = supabase
+      .channel('user_changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'users' },
+        (payload) => {
+          // Update users list
+          setUsers(current => 
+            current.map(user => 
+              user.id === payload.new.id ? { ...user, ...payload.new } : user
+            )
+          );
+        }
+      )
+      .subscribe();
+
     return () => {
-      // Cleanup would be more complex in a real implementation
-      // as we'd need to track all the individual listeners
+      subscription.unsubscribe();
     };
   }, []);
 
@@ -453,4 +384,4 @@ export const UserManagement: React.FC = () => {
       )}
     </div>
   );
-}; 
+};

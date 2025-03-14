@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { useAuth } from "@/contexts/AuthContext";
-import { getAllUsers, updateUserRole, deleteAllUsers } from "@/lib/firebase";
-import { safeUpdate } from "@/lib/firebase-utils";
+import { useAuth } from "@/contexts/SupabaseAuthContext";
+import { getAllUsers, updateUserRole, deleteAllUsers } from "@/lib/admin-utils";
+import { safeUpdate } from "@/lib/supabase-utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
@@ -35,65 +35,26 @@ const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("overview");
 
   useEffect(() => {
-    // Check if user is logged in
-    if (!currentUser && !loading) {
-      navigate("/login");
+    if (!isAdmin || !currentUser) {
+      navigate('/');
       return;
     }
 
-    // Check if user is admin
-    if (currentUser && !isAdmin && !loading) {
-      setAdminError("You don't have admin privileges to access this page");
-      // Don't navigate away immediately to show the error message
-      setTimeout(() => {
-        navigate("/");
-      }, 3000);
-      return;
-    }
-
-    // Check if admin is verified
-    if (currentUser && isAdmin && !isVerifiedAdmin && !loading) {
-      setAdminError("Your admin account is not verified. Please verify your email to access admin features.");
-      // Don't navigate away immediately to show the error message
-      setTimeout(() => {
-        navigate("/profile");
-      }, 3000);
-      return;
-    }
-
-    // Only fetch users if the user is a verified admin
-    if (currentUser && isAdmin) {
-      console.log("Fetching users...");
-      fetchUsers();
-    }
-  }, [currentUser, isAdmin, isVerifiedAdmin]);
-
-  const fetchUsers = async () => {
-    setIsLoading(true);
-    try {
-      console.log("Getting all users...");
-      getAllUsers((usersData) => {
-        console.log("Users data received:", usersData);
-        if (!usersData) {
-          console.log("No users data received");
-          setUsers({});
-        } else {
-          setUsers(usersData);
-        }
-        setIsLoading(false);
+    const fetchUsers = async () => {
+      setLoading(true);
+      try {
+        const usersData = await getAllUsers();
+        setUsers(usersData);
+      } catch (error) {
+        console.error('Error fetching users:', error);
+        setAdminError('Failed to fetch users');
+      } finally {
         setLoading(false);
-      });
-    } catch (error) {
-      console.error("Error fetching users:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load users. Please try again later.",
-        variant: "destructive",
-      });
-      setIsLoading(false);
-      setLoading(false);
-    }
-  };
+      }
+    };
+
+    fetchUsers();
+  }, [isAdmin, currentUser, navigate]);
 
   const handlePermissionChange = async (userId: string, permission: string, value: boolean) => {
     try {

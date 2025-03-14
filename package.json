@@ -6,9 +6,6 @@
   "homepage": "https://petfeeder.redwancodes.com",
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
-    "@firebase/app": "^0.9.25",
-    "@firebase/auth": "^1.5.1",
-    "@firebase/firestore": "^4.4.0",
     "@hookform/resolvers": "^4.1.3",
     "@radix-ui/react-accordion": "^1.2.3",
     "@radix-ui/react-alert-dialog": "^1.1.6",
@@ -33,6 +30,7 @@
     "@radix-ui/react-tabs": "^1.1.3",
     "@radix-ui/react-toast": "^1.2.6",
     "@radix-ui/react-toggle": "^1.1.2",
+    "@supabase/supabase-js": "^2.49.1",
     "@types/node": "^20.10.5",
     "@types/react": "^18.2.45",
     "@types/react-dom": "^18.2.18",
@@ -43,7 +41,6 @@
     "clsx": "^2.1.1",
     "date-fns": "^3.0.6",
     "emailjs-com": "^3.2.0",
-    "firebase": "^10.7.1",
     "framer-motion": "^12.4.10",
     "lucide-react": "^0.479.0",
     "nodemailer": "^6.10.0",
@@ -56,6 +53,7 @@
     "react-icons": "^5.5.0",
     "react-router-dom": "^6.21.1",
     "recharts": "^2.15.1",
+    "sonner": "^2.0.1",
     "tailwind-merge": "^3.0.2",
     "tailwindcss": "^3.4.0",
     "tailwindcss-animate": "^1.0.7",
@@ -73,8 +71,8 @@
     "prepare": "husky install",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist",
-    "deploy:firebase": "firebase deploy",
-    "deploy:hosting": "firebase deploy --only hosting",
+    "deploy:db": "supabase db push",
+    "deploy:hosting": "vercel deploy --prod",
     "analyze": "source-map-explorer 'dist/assets/*.js'",
     "clean": "rimraf dist",
     "type-check": "tsc --noEmit",
@@ -122,5 +120,18 @@
       "eslint --fix",
       "prettier --write"
     ]
+  },
+  "build": {
+    "rollupOptions": {
+      "output": {
+        "manualChunks": {
+          "react-vendor": [
+            "react",
+            "react-dom",
+            "react-router-dom"
+          ]
+        }
+      }
+    }
   }
 }

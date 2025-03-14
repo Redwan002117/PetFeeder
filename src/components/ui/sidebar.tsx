@@ -12,7 +12,7 @@ import {
   LogOut,
   Shield,
 } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/SupabaseAuthContext";
 import { Button } from "./button";
 import { useToast } from "@/hooks/use-toast";
 import { useMobileNav } from "@/hooks/use-mobile";

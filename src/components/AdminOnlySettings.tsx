@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -6,9 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, Server, Send, Users, Database, Shield, Key } from "lucide-react";
-import { ref, update, get } from "firebase/database";
-import { database } from "@/lib/firebase";
-import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/SupabaseAuthContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useForm } from "react-hook-form";
@@ -18,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { sendTestEmail } from "@/services/email-service";
 import { Separator } from "@/components/ui/separator";
 import { Loader2 } from "lucide-react";
+import { getEmailSettings, updateEmailSettings, type EmailSettings } from "@/lib/admin-settings-utils";
 
 // Define schema for SMTP settings form
 const smtpFormSchema = z.object({
@@ -38,6 +38,14 @@ const AdminOnlySettings = () => {
   const { toast } = useToast();
   const [smtpProvider, setSmtpProvider] = React.useState("smtp");
   const [isLoading, setIsLoading] = React.useState(false);
+  const [serviceId, setServiceId] = useState('');
+  const [templateId, setTemplateId] = useState('');
+  const [userId, setUserId] = useState('');
+  const [adminEmail, setAdminEmail] = useState('');
+  const [emailEnabled, setEmailEnabled] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   // Initialize form with default values
   const form = useForm<SMTPFormValues>({
@@ -54,35 +62,76 @@ const AdminOnlySettings = () => {
     },
   });
 
-  // Load SMTP settings from Firebase when component mounts
-  React.useEffect(() => {
-    if (currentUser) {
+  // Load SMTP settings from Supabase when component mounts
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const loadEmailSettings = async () => {
       setIsLoading(true);
-      const smtpSettingsRef = ref(database, `system/smtpSettings`);
-      get(smtpSettingsRef).then((snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.val();
+      try {
+        const { data: settingsData, error } = await supabase
+          .from('admin_settings')
+          .select('*')
+          .single();
+
+        if (error) throw error;
+        
+        if (settingsData) {
           form.reset({
-            service: data.service || "",
-            host: data.host || "",
-            port: data.port || "",
-            secure: data.secure !== undefined ? data.secure : true,
-            username: data.username || "",
-            password: data.password || "",
-            fromEmail: data.fromEmail || "",
-            apiKey: data.apiKey || "",
+            service: settingsData.smtp_service || "",
+            host: settingsData.smtp_host || "",
+            port: settingsData.smtp_port || "",
+            secure: settingsData.smtp_secure !== undefined ? settingsData.smtp_secure : true,
+            username: settingsData.smtp_username || "",
+            password: settingsData.smtp_password || "",
+            fromEmail: settingsData.from_email || "",
+            apiKey: settingsData.api_key || "",
           });
-          setSmtpProvider(data.service === "emailjs" ? "api" : "smtp");
+          setSmtpProvider(settingsData.smtp_service === "emailjs" ? "api" : "smtp");
         }
-        setIsLoading(false);
-      }).catch(error => {
+      } catch (error) {
         console.error("Error loading SMTP settings:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load email settings",
+          variant: "destructive",
+        });
+      } finally {
         setIsLoading(false);
-      });
-    }
+      }
+    };
+
+    loadEmailSettings();
   }, [currentUser, form]);
 
-  const onSubmitSMTPSettings = (data: SMTPFormValues) => {
+  useEffect(() => {
+    const loadEmailSettings = async () => {
+      if (!currentUser || !isAdmin) return;
+      
+      setLoading(true);
+      try {
+        const settings = await getEmailSettings();
+        setServiceId(settings?.serviceId || '');
+        setTemplateId(settings?.templateId || '');
+        setUserId(settings?.userId || '');
+        setAdminEmail(settings?.adminEmail || '');
+        setEmailEnabled(settings?.emailEnabled || false);
+      } catch (error) {
+        console.error('Error loading email settings:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to load email settings',
+          variant: 'destructive'
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadEmailSettings();
+  }, [currentUser, isAdmin]);
+
+  const onSubmitSMTPSettings = async (data: SMTPFormValues) => {
     if (!currentUser) {
       toast({
         title: "Error",
@@ -93,29 +142,69 @@ const AdminOnlySettings = () => {
     }
 
     setIsLoading(true);
-    const smtpSettingsRef = ref(database, `system/smtpSettings`);
-    
-    update(smtpSettingsRef, {
-      ...data,
-      updatedAt: new Date().toISOString(),
-      updatedBy: currentUser.uid,
-    })
-      .then(() => {
-        toast({
-          title: "Settings Saved",
-          description: "Email settings have been updated successfully.",
+    try {
+      const { error } = await supabase
+        .from('admin_settings')
+        .upsert({
+          smtp_service: data.service,
+          smtp_host: data.host,
+          smtp_port: data.port,
+          smtp_secure: data.secure,
+          smtp_username: data.username,
+          smtp_password: data.password,
+          from_email: data.fromEmail,
+          api_key: data.apiKey,
+          updated_at: new Date().toISOString(),
+          updated_by: currentUser.id,
         });
-        setIsLoading(false);
-      })
-      .catch((error) => {
-        console.error("Error saving SMTP settings:", error);
-        toast({
-          title: "Error",
-          description: "Failed to save email settings. Please try again.",
-          variant: "destructive",
-        });
-        setIsLoading(false);
+
+      if (error) throw error;
+
+      toast({
+        title: "Settings Saved",
+        description: "Email settings have been updated successfully.",
       });
+    } catch (error) {
+      console.error("Error saving SMTP settings:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save email settings. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    if (!currentUser || !isAdmin) return;
+
+    setSaving(true);
+    try {
+      const settings: EmailSettings = {
+        serviceId,
+        templateId,
+        userId,
+        adminEmail,
+        emailEnabled
+      };
+
+      await updateEmailSettings(settings);
+
+      toast({
+        title: 'Settings Saved',
+        description: 'Email settings have been updated successfully.',
+      });
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to save settings',
+        variant: 'destructive'
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleTestEmail = async () => {
@@ -544,4 +633,4 @@ const AdminOnlySettings = () => {
   );
 };
 
-export default AdminOnlySettings; 
+export default AdminOnlySettings;

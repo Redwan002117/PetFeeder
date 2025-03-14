@@ -91,17 +91,17 @@ export function APIGuide() {
           <AccordionTrigger>Authentication</AccordionTrigger>
           <AccordionContent>
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Firebase Authentication</h3>
-              <p>The PetFeeder API uses Firebase Authentication. Include your Firebase auth token in the Authorization header:</p>
+              <h3 className="text-lg font-semibold">Supabase Authentication</h3>
+              <p>The PetFeeder API uses Supabase Authentication. Include your Supabase auth token in the Authorization header:</p>
               <pre className="bg-gray-100 p-4 rounded-md">
                 <code>
-                  Authorization: Bearer {'{your-firebase-token}'}
+                  Authorization: Bearer {'{your-supabase-token}'}
                 </code>
               </pre>
 
               <div className="bg-yellow-50 p-4 rounded-md mt-4">
                 <p className="text-sm text-yellow-800">
-                  Important: Keep your Firebase credentials secure and never expose them in client-side code.
+                  Important: Keep your Supabase credentials secure and never expose them in client-side code.
                 </p>
               </div>
             </div>
@@ -390,4 +390,4 @@ Common Error Codes:
       </Accordion>
     </div>
   );
-} 
+}

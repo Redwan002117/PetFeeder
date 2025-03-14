@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { database } from '@/lib/firebase';
-import { safeRef, safeGet, safeOnValue } from '@/lib/firebase-utils';
+import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, FileText, AlertCircle, Info, PawPrint } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -34,72 +33,25 @@ export const SystemLogs: React.FC = () => {
     };
   }, [filter, limit]);
 
-  const fetchLogs = () => {
+  const fetchLogs = async () => {
     try {
-      setLoading(true);
-      
-      // Use safeRef instead of ref
-      const logsRef = safeRef('logs');
-      
-      if (!logsRef) {
-        setLogs([]);
-        setLoading(false);
-        return;
-      }
+      const { data, error } = await supabase
+        .from('system_logs')
+        .select('*')
+        .order('timestamp', { ascending: false })
+        .limit(limit);
 
-      // Use safeOnValue instead of onValue
-      const unsubscribe = safeOnValue(
-        'logs',
-        (snapshot) => {
-          if (snapshot.exists()) {
-            const logsData = snapshot.val();
-
-            // Convert to array and sort
-            let logsArray = Object.keys(logsData).map(key => ({
-              id: key,
-              ...logsData[key]
-            })) as LogEntry[];
-
-            // Sort by timestamp (newest first)
-            logsArray.sort((a, b) => b.timestamp - a.timestamp);
-
-            // Apply filter if needed
-            if (filter !== 'all') {
-              logsArray = logsArray.filter(log => log.level === filter);
-            }
-
-            // Apply limit
-            logsArray = logsArray.slice(0, limit);
-
-            setLogs(logsArray);
-          } else {
-            setLogs([]);
-          }
-          setLoading(false);
-        },
-        (error) => {
-          console.error("Error fetching logs:", error);
-          toast({
-            title: "Error",
-            description: "Failed to load system logs. Please try again later.",
-            variant: "destructive"
-          });
-          setLoading(false);
-          setLogs([]);
-        }
-      );
-
-      return unsubscribe;
+      if (error) throw error;
+      setLogs(data || []);
     } catch (error) {
-      console.error("Error setting up logs listener:", error);
+      console.error("Error fetching logs:", error);
       toast({
         title: "Error",
-        description: "Failed to load system logs. Please try again later.",
+        description: "Failed to fetch logs",
         variant: "destructive"
       });
+    } finally {
       setLoading(false);
-      setLogs([]);
-      return undefined;
     }
   };
 
@@ -272,4 +224,4 @@ export const SystemLogs: React.FC = () => {
       )}
     </div>
   );
-}; 
+};

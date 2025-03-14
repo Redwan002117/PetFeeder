@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { auth, db } from '../config/firebase';
+import { User } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 
 interface UserData extends User {
   role?: string;
@@ -21,18 +20,25 @@ export const useAuth = (): AuthHook => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    // Check initial session
+    const initializeAuth = async () => {
       try {
-        if (firebaseUser) {
-          // Get additional user data from Firestore
-          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-          const userData = userDoc.data();
-          
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          // Get additional user data from Supabase
+          const { data: userData, error: userError } = await supabase
+            .from('users')
+            .select('role')
+            .eq('id', session.user.id)
+            .single();
+
+          if (userError) throw userError;
+
           const enhancedUser = {
-            ...firebaseUser,
+            ...session.user,
             role: userData?.role || 'user'
           };
-          
+
           setUser(enhancedUser);
           setIsAdmin(userData?.role === 'admin');
         } else {
@@ -45,10 +51,48 @@ export const useAuth = (): AuthHook => {
       } finally {
         setIsLoading(false);
       }
-    });
+    };
 
-    return () => unsubscribe();
+    initializeAuth();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        try {
+          if (session?.user) {
+            // Get additional user data from Supabase
+            const { data: userData, error: userError } = await supabase
+              .from('users')
+              .select('role')
+              .eq('id', session.user.id)
+              .single();
+
+            if (userError) throw userError;
+
+            const enhancedUser = {
+              ...session.user,
+              role: userData?.role || 'user'
+            };
+
+            setUser(enhancedUser);
+            setIsAdmin(userData?.role === 'admin');
+          } else {
+            setUser(null);
+            setIsAdmin(false);
+          }
+        } catch (err) {
+          console.error('Error fetching user data:', err);
+          setError(err instanceof Error ? err.message : 'An error occurred');
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   return { user, isAdmin, isLoading, error };
-}; 
+};

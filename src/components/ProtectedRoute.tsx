@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Navigate } from "react-router-dom";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth } from "@/contexts/SupabaseAuthContext";
 import { Spinner } from "./ui/spinner";
 import { ErrorDisplay } from "./ErrorDisplay";
 import Layout from "./Layout";

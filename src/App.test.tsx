@@ -13,7 +13,7 @@ vi.mock('./lib/firebase', () => ({
 }));
 
 // Mock the contexts
-vi.mock('./contexts/AuthContext', () => ({
+vi.mock('./contexts/SupabaseAuthContext', () => ({
   useAuth: () => ({
     currentUser: null,
     isAdmin: false,

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Account Request</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        .header {
+            background-color: #4a90e2;
+            color: white;
+            text-align: center;
+            padding: 20px;
+        }
+        .content {
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .button {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #4a90e2;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .button:hover {
+            background-color: #357abd;
+        }
+        .approval-buttons {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .approve {
+            background-color: #27ae60;
+        }
+        .reject {
+            background-color: #e74c3c;
+        }
+        .user-details {
+            background-color: #f9f9f9;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Admin Account Request</h1>
+    </div>
+    <div class="content">
+        <p>Hello Admin,</p>
+        
+        <p>A new request for admin privileges has been submitted.</p>
+
+        <div class="user-details">
+            <h3>User Details:</h3>
+            <p><strong>Name:</strong> {{requestingUserName}}</p>
+            <p><strong>Email:</strong> {{requestingUserEmail}}</p>
+            <p><strong>Request Reason:</strong> {{requestReason}}</p>
+            <p><strong>Current Role:</strong> {{currentRole}}</p>
+            <p><strong>Requested Access Level:</strong> {{requestedAccessLevel}}</p>
+        </div>
+
+        <div class="approval-buttons">
+            <a href="{{approveLink}}" class="button approve">Approve Request</a>
+            <a href="{{rejectLink}}" class="button reject">Reject Request</a>
+        </div>
+
+        <p>You can also review this request in the admin dashboard:</p>
+        <p style="text-align: center;">
+            <a href="{{adminDashboardLink}}" class="button">Go to Admin Dashboard</a>
+        </p>
+
+        <p>Best regards,<br>Pet Feeder System</p>
+    </div>
+</body>
+</html>

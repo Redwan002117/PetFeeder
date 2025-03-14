@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { database } from '@/lib/firebase';
-import { safeRef, safeGet, safeUpdate, safeOnValue, safePush, safeRemove } from '@/lib/firebase-utils';
+import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -74,75 +73,61 @@ export const DeviceManagement: React.FC = () => {
     fetchDevices();
     return () => {
       // Clean up any listeners
-      const devicesRef = safeRef('devices');
-      if (devicesRef) {
-        // No need to call off directly, we'll use the cleanup function from safeOnValue
-      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const subscription = supabase
+      .channel('device_changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'devices' },
+        (payload) => {
+          // Update devices list
+          setDevices(current => [...current, payload.new]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
     };
   }, []);
 
   const fetchDevices = async () => {
     try {
       setLoading(true);
-      const devicesRef = safeRef('devices');
-      
-      if (!devicesRef) {
-        setLoading(false);
-        setDevices([]);
-        return;
-      }
+      const { data, error } = await supabase
+        .from('devices')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-      // Use safeOnValue instead of onValue
-      const unsubscribe = safeOnValue(
-        'devices',
-        (snapshot) => {
-          if (snapshot.exists()) {
-            const devicesData = snapshot.val();
-            const devicesArray = Object.keys(devicesData).map(key => ({
-              id: key,
-              ...devicesData[key]
-            }));
-            setDevices(devicesArray);
-          } else {
-            setDevices([]);
-          }
-          setLoading(false);
-        },
-        (error) => {
-          console.error("Error fetching devices:", error);
-          setLoading(false);
-          setDevices([]);
-        }
-      );
-
-      // Return the unsubscribe function for cleanup
-      return unsubscribe;
+      if (error) throw error;
+      setDevices(data || []);
     } catch (error) {
       console.error("Error fetching devices:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load devices",
+        variant: "destructive"
+      });
+    } finally {
       setLoading(false);
-      setDevices([]);
     }
   };
 
   const fetchDeviceStats = async (deviceId: string) => {
     setStatsLoading(true);
     try {
-      // Fetch device stats from Firebase
-      const statsRef = safeRef(`deviceStats/${deviceId}`);
-      const statsSnapshot = await safeGet(statsRef);
-      
-      if (!statsSnapshot.exists()) {
-        // Create default stats if none exist
-        const defaultStats: DeviceStats = {
-          feedingsToday: 0,
-          totalFeedings: 0,
-          averageFoodPerDay: 0,
-          uptime: 0
-        };
-        setDeviceStats(defaultStats);
-      } else {
-        setDeviceStats(statsSnapshot.val());
-      }
+      // Fetch device stats from Supabase
+      const { data, error } = await supabase
+        .from('deviceStats')
+        .select('*')
+        .eq('deviceId', deviceId)
+        .single();
+
+      if (error) throw error;
+      setDeviceStats(data);
     } catch (error) {
       console.error('Error fetching device stats:', error);
       toast({
@@ -169,39 +154,35 @@ export const DeviceManagement: React.FC = () => {
 
   const handleSaveDevice = async () => {
     if (!editingDevice) return;
-    
+
     try {
       setIsUpdating(true);
-      
+
       const updates = {
         name: deviceName,
         status: deviceStatus,
         location: deviceLocation,
         lastUpdated: Date.now()
       };
-      
-      // Use safeUpdate instead of update
-      const success = await safeUpdate(`devices/${editingDevice.id}`, updates);
-      
-      if (success) {
-        toast({
-          title: "Device Updated",
-          description: `Device ${deviceName} has been updated successfully.`,
-        });
-        setEditingDevice(null);
-      } else {
-        toast({
-          title: "Update Failed",
-          description: "Failed to update device. Please try again.",
-          variant: "destructive"
-        });
-      }
+
+      const { error } = await supabase
+        .from('devices')
+        .update(updates)
+        .eq('id', editingDevice.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Device Updated",
+        description: `Device ${deviceName} has been updated successfully.`,
+      });
+      setEditingDevice(null);
     } catch (error) {
       console.error("Error updating device:", error);
       toast({
         title: "Update Failed",
         description: "An error occurred while updating the device.",
-        variant: "destructive"
+        variant: "destructive",
       });
     } finally {
       setIsUpdating(false);
@@ -213,42 +194,36 @@ export const DeviceManagement: React.FC = () => {
     setDeleteDialogOpen(true);
   };
 
-  const handleDeleteDevice = async (deviceId: string) => {
+  const handleDeleteDevice = async () => {
+    if (!deleteDeviceId) return;
     try {
-      setIsDeleting(true);
-      
-      // Use safeRemove instead of remove
-      const success = await safeRemove(`devices/${deviceId}`);
-      
-      if (success) {
-        toast({
-          title: "Device Deleted",
-          description: "The device has been deleted successfully.",
-        });
-        setDeleteDialogOpen(false);
-      } else {
-        toast({
-          title: "Deletion Failed",
-          description: "Failed to delete device. Please try again.",
-          variant: "destructive"
-        });
-      }
+      const { error } = await supabase
+        .from('devices')
+        .delete()
+        .eq('id', deleteDeviceId);
+
+      if (error) throw error;
+      setDevices(devices.filter(device => device.id !== deleteDeviceId));
+      toast({
+        title: "Device Deleted",
+        description: "Device has been deleted successfully",
+      });
     } catch (error) {
       console.error("Error deleting device:", error);
       toast({
-        title: "Deletion Failed",
-        description: "An error occurred while deleting the device.",
-        variant: "destructive"
+        title: "Error",
+        description: "Failed to delete device",
+        variant: "destructive",
       });
     } finally {
-      setIsDeleting(false);
+      setDeleteDeviceId(null);
     }
   };
 
   const handleAddDevice = async () => {
     try {
       setIsAdding(true);
-      
+
       const newDevice = {
         name: newDeviceName,
         model: newDeviceModel,
@@ -264,35 +239,30 @@ export const DeviceManagement: React.FC = () => {
         owner: newDeviceOwnerName,
         createdAt: Date.now()
       };
-      
-      // Use safePush instead of push and set
-      const deviceId = await safePush('devices', newDevice);
-      
-      if (deviceId) {
-        toast({
-          title: "Device Added",
-          description: `Device ${newDeviceName} has been added successfully.`,
-        });
-        setNewDeviceName('');
-        setNewDeviceModel('');
-        setNewDeviceSerial('');
-        setNewDeviceLocation('');
-        setNewDeviceOwner('');
-        setNewDeviceOwnerName('');
-        setAddDeviceDialogOpen(false);
-      } else {
-        toast({
-          title: "Add Failed",
-          description: "Failed to add device. Please try again.",
-          variant: "destructive"
-        });
-      }
+
+      const { data, error } = await supabase
+        .from('devices')
+        .insert(newDevice);
+
+      if (error) throw error;
+
+      toast({
+        title: "Device Added",
+        description: `Device ${newDeviceName} has been added successfully.`,
+      });
+      setNewDeviceName('');
+      setNewDeviceModel('');
+      setNewDeviceSerial('');
+      setNewDeviceLocation('');
+      setNewDeviceOwner('');
+      setNewDeviceOwnerName('');
+      setAddDeviceDialogOpen(false);
     } catch (error) {
       console.error("Error adding device:", error);
       toast({
         title: "Add Failed",
         description: "An error occurred while adding the device.",
-        variant: "destructive"
+        variant: "destructive",
       });
     } finally {
       setIsAdding(false);
@@ -301,25 +271,33 @@ export const DeviceManagement: React.FC = () => {
 
   const handleScheduleMaintenance = async () => {
     if (!selectedDevice || !maintenanceNotes) return;
-    
+
     try {
       // Update device status and add maintenance record
-      await safeUpdate(`devices/${selectedDevice.id}`, {
-        status: 'maintenance'
-      });
-      
+      const { error: updateError } = await supabase
+        .from('devices')
+        .update({ status: 'maintenance' })
+        .eq('id', selectedDevice.id);
+
+      if (updateError) throw updateError;
+
       // Add maintenance record
-      const maintenanceId = await safePush(`maintenance/${selectedDevice.id}`, {
-        date: Date.now(),
-        notes: maintenanceNotes,
-        status: 'scheduled'
-      });
-      
+      const { error: insertError } = await supabase
+        .from('maintenance')
+        .insert({
+          deviceId: selectedDevice.id,
+          date: Date.now(),
+          notes: maintenanceNotes,
+          status: 'scheduled'
+        });
+
+      if (insertError) throw insertError;
+
       toast({
         title: "Maintenance Scheduled",
         description: "Device maintenance has been scheduled successfully.",
       });
-      
+
       setMaintenanceNotes('');
       setMaintenanceDialogOpen(false);
     } catch (error) {
@@ -327,30 +305,30 @@ export const DeviceManagement: React.FC = () => {
       toast({
         title: "Error",
         description: "Failed to schedule maintenance. Please try again.",
-        variant: "destructive"
+        variant: "destructive",
       });
     }
   };
 
   const handleExportDeviceData = () => {
     if (!selectedDevice) return;
-    
+
     // Create CSV data
     const headers = Object.keys(selectedDevice).join(',');
     const values = Object.values(selectedDevice).join(',');
     const csvContent = `data:text/csv;charset=utf-8,${headers}\n${values}`;
-    
+
     // Create download link
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
     link.setAttribute('download', `device_${selectedDevice.id}_data.csv`);
     document.body.appendChild(link);
-    
+
     // Trigger download
     link.click();
     document.body.removeChild(link);
-    
+
     toast({
       title: "Export Complete",
       description: "Device data has been exported successfully.",
@@ -367,7 +345,7 @@ export const DeviceManagement: React.FC = () => {
       device.serialNumber.toLowerCase().includes(searchTermLower) ||
       (device.location && device.location.toLowerCase().includes(searchTermLower))
     );
-    
+
     // Apply status filter
     if (filterStatus === 'all') {
       return matchesSearch;
@@ -393,19 +371,21 @@ export const DeviceManagement: React.FC = () => {
 
   const formatLastSeen = (timestamp: number) => {
     if (!timestamp) return 'Never';
-    
+
     const date = new Date(timestamp);
     return date.toLocaleString();
   };
 
   const handleStatusChange = async (deviceId: string, newStatus: 'online' | 'offline' | 'maintenance') => {
     try {
-      // Update the status in Firebase
-      const deviceRef = safeRef(`devices/${deviceId}`);
-      await safeUpdate(deviceRef, {
-        status: newStatus
-      });
-      
+      // Update the status in Supabase
+      const { error } = await supabase
+        .from('devices')
+        .update({ status: newStatus })
+        .eq('id', deviceId);
+
+      if (error) throw error;
+
       // Update local state
       setDevices(devices.map(device => {
         if (device.id === deviceId) {
@@ -416,7 +396,7 @@ export const DeviceManagement: React.FC = () => {
         }
         return device;
       }));
-      
+
       toast({
         title: "Status Updated",
         description: `Device status has been updated to ${newStatus}.`,
@@ -858,4 +838,4 @@ export const DeviceManagement: React.FC = () => {
       </Dialog>
     </div>
   );
-}; 
+};

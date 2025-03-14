@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/SupabaseAuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, RefreshCw, Loader2 } from "lucide-react";
-import { getDevices } from "@/lib/firebase";
-import { safeGet } from "@/lib/firebase-utils";
+import { safeGet } from "@/lib/supabase-utils";
 import { useToast } from "@/hooks/use-toast";
 import PageHeader from "@/components/PageHeader";
 
@@ -28,51 +27,22 @@ const FoodLevels = () => {
 
     setLoading(true);
     try {
-      // Use safeGet to fetch devices
-      const userDevicesSnapshot = await safeGet(`users/${currentUser.uid}/devices`);
-      
-      if (userDevicesSnapshot && userDevicesSnapshot.exists()) {
-        const userDevicesData = userDevicesSnapshot.val();
-        
-        // Fetch detailed device info for each device
-        const devicePromises = Object.keys(userDevicesData).map(async (deviceId) => {
-          const deviceSnapshot = await safeGet(`devices/${deviceId}`);
-          if (deviceSnapshot && deviceSnapshot.exists()) {
-            const deviceData = deviceSnapshot.val();
-            return {
-              id: deviceId,
-              name: deviceData.name || `Device ${deviceId.substring(0, 6)}`,
-              foodLevel: deviceData.foodLevel || 0,
-              lastUpdated: deviceData.lastSeen || Date.now()
-            };
-          }
-          return null;
-        });
-        
-        const deviceResults = await Promise.all(devicePromises);
-        const validDevices = deviceResults.filter(device => device !== null) as Device[];
-        
-        if (validDevices.length > 0) {
-          setDevices(validDevices);
-        } else {
-          // If no valid devices found, use mock data
-          setDevices([
-            {
-              id: 'mock-device-1',
-              name: 'Pet Feeder 1',
-              foodLevel: 75,
-              lastUpdated: Date.now() - 3600000 // 1 hour ago
-            },
-            {
-              id: 'mock-device-2',
-              name: 'Pet Feeder 2',
-              foodLevel: 25,
-              lastUpdated: Date.now() - 86400000 // 1 day ago
-            }
-          ]);
-        }
+      const { data, error } = await supabase
+        .from('devices')
+        .select('id, name, food_level, last_updated')
+        .eq('user_id', currentUser.id);
+
+      if (error) throw error;
+
+      if (data) {
+        const devicesData = data.map(device => ({
+          id: device.id,
+          name: device.name || `Device ${device.id.substring(0, 6)}`,
+          foodLevel: device.food_level || 0,
+          lastUpdated: new Date(device.last_updated).getTime()
+        }));
+        setDevices(devicesData);
       } else {
-        // If no devices found, use mock data
         setDevices([
           {
             id: 'mock-device-1',
@@ -96,7 +66,6 @@ const FoodLevels = () => {
         variant: "destructive",
       });
       
-      // Use mock data on error
       setDevices([
         {
           id: 'mock-device-1',
@@ -120,7 +89,6 @@ const FoodLevels = () => {
   useEffect(() => {
     fetchDevices();
 
-    // Set up interval to refresh data every minute
     const interval = setInterval(fetchDevices, 60000);
 
     return () => clearInterval(interval);
@@ -136,22 +104,18 @@ const FoodLevels = () => {
     const now = Date.now();
     const diff = now - timestamp;
 
-    // Less than a minute
     if (diff < 60000) return "Just now";
 
-    // Less than an hour
     if (diff < 3600000) {
       const minutes = Math.floor(diff / 60000);
       return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
     }
 
-    // Less than a day
     if (diff < 86400000) {
       const hours = Math.floor(diff / 3600000);
       return `${hours} hour${hours > 1 ? 's' : ''} ago`;
     }
 
-    // More than a day
     const days = Math.floor(diff / 86400000);
     return `${days} day${days > 1 ? 's' : ''} ago`;
   };
@@ -243,4 +207,4 @@ const FoodLevels = () => {
   );
 };
 
-export default FoodLevels; 
+export default FoodLevels;

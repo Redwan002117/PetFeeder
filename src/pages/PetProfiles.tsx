@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { database, ref, onValue, off, push, update, remove, serverTimestamp } from '@/lib/firebase';
-import { safeRef, safeOnValue, safeUpdate, safePush, safeRemove } from '@/lib/firebase-utils';
+import { useAuth } from '@/contexts/SupabaseAuthContext';
+import { safeGet, safeOnValue, safeUpdate, safePush, safeRemove } from '@/lib/supabase-utils';
 
 // UI Components
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1375,4 +1374,4 @@ const PetProfiles = () => {
   );
 };
 
-export default PetProfiles; 
+export default PetProfiles;

@@ -1,19 +1,21 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/SupabaseAuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { HandPlatter, Shield, User, Eye, EyeOff, Mail, Lock, Loader2 } from "lucide-react";
+import { HandPlatter, User, Eye, EyeOff, Mail, Lock, Loader2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
 import { useToast } from "@/components/ui/use-toast";
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
 import { validateAdminKey } from '@/config/adminKey';
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { supabase } from '@/lib/supabase';
+import { testConnection } from '@/lib/supabase-config';
+import { handleSupabaseError } from '@/lib/supabase-config';
+import { toast } from 'sonner';
 
 const Register = () => {
   const [email, setEmail] = useState("");
@@ -23,7 +25,7 @@ const Register = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { register } = useAuth();
+  const { signUp } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
@@ -32,50 +34,57 @@ const Register = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    console.log("Register form submitted with:", { email, password, name, username });
-
-    if (!email || !password || !confirmPassword || !username || !name) {
-      setError("All fields are required");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
-      return;
-    }
-
-    if (username.length < 3) {
-      setError("Username must be at least 3 characters long");
-      return;
-    }
-
-    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-      setError("Username can only contain letters, numbers, and underscores");
-      return;
-    }
+    setLoading(true);
 
     try {
-      setLoading(true);
-      console.log("Attempting to register user...");
+      // Validate input first
+      if (!email || !password || !confirmPassword || !username || !name) {
+        setError("All fields are required");
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        setError("Passwords do not match");
+        return;
+      }
+
+      // Test connection before attempting registration
+      const isConnected = await testConnection();
+      if (!isConnected) {
+        throw new Error("Unable to connect to the server. Please check your internet connection.");
+      }
+
+      console.log("Attempting registration...");
       
-      // Register regular user using the register function from AuthContext
-      const result = await register(email, password, username, false, name);
-      console.log("Registration result:", result);
-      
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            username,
+            full_name: name,
+            avatar_url: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`
+          }
+        }
+      });
+
+      if (authError) throw authError;
+
+      if (!authData.user) {
+        throw new Error("Registration failed - no user data received");
+      }
+
+      // Use the toast component correctly
       toast({
-        title: "Registration successful",
-        description: "Please check your email to verify your account",
-        variant: "default",
+        title: "Registration successful!",
+        description: "Please check your email to verify your account.",
       });
-      
-      navigate("/login", { 
-        state: { 
-          message: "Account created successfully! Please verify your email before logging in." 
-        } 
-      });
+
+      navigate('/login');
     } catch (error: any) {
       console.error("Registration error:", error);
-      setError(error.message || "Failed to create an account");
+      const errorMessage = handleSupabaseError(error, 'registration');
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

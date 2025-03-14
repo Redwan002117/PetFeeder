@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/SupabaseAuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Clock, Plus, Trash2, Check, X, AlertCircle } from "lucide-react";
-import { getFeedingSchedule, saveFeedingSchedule } from "@/lib/firebase";
+import { supabase } from '@/lib/supabase';
 import { useToast } from "@/hooks/use-toast";
 
 const Schedule = () => {
@@ -35,23 +35,32 @@ const Schedule = () => {
 
   useEffect(() => {
     if (currentUser) {
-      const unsubscribe = getFeedingSchedule(currentUser.uid, (data) => {
-        if (data) {
-          const scheduleArray = Object.keys(data).map(key => ({
-            id: key,
-            ...data[key]
-          }));
-          setSchedules(scheduleArray.sort((a, b) => {
-            const timeA = a.time.split(':').map(Number);
-            const timeB = b.time.split(':').map(Number);
-            return (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
-          }));
-        } else {
-          setSchedules([]);
-        }
-      });
+      const subscription = supabase
+        .channel('feeding_schedules')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'feeding_schedules',
+            filter: `user_id=eq.${currentUser.id}`
+          },
+          (payload) => {
+            if (payload.new) {
+              setSchedules(scheduleArray.sort((a, b) => {
+                const timeB = b.time.split(':').map(Number);
+                return (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
+              }));
+            } else {
+              setSchedules([]);
+            }
+          }
+        )
+        .subscribe();
 
-      return () => unsubscribe();
+      return () => {
+        subscription.unsubscribe();
+      };
     }
   }, [currentUser]);
 
@@ -59,47 +68,15 @@ const Schedule = () => {
     if (currentUser) {
       setLoading(true);
       try {
-        // Create a new schedule object with a unique ID
-        const newScheduleWithId = {
-          ...newSchedule,
-          id: Date.now().toString(),
-        };
+        const { error } = await supabase
+          .from('feeding_schedules')
+          .insert([{
+            user_id: currentUser.id,
+            ...newSchedule,
+            created_at: new Date().toISOString()
+          }]);
 
-        // Add to current schedules
-        const updatedSchedules = [...schedules, newScheduleWithId];
-        
-        // Create object from array for Firebase
-        const scheduleObject = updatedSchedules.reduce((acc, schedule) => {
-          acc[schedule.id] = { ...schedule };
-          // Remove the id from the nested object since it's already the key
-          delete acc[schedule.id].id;
-          return acc;
-        }, {});
-
-        // Save to Firebase
-        await saveFeedingSchedule(currentUser.uid, scheduleObject);
-        
-        // Reset form and close dialog
-        setNewSchedule({
-          time: "08:00",
-          amount: 25,
-          enabled: true,
-          days: {
-            monday: true,
-            tuesday: true,
-            wednesday: true,
-            thursday: true,
-            friday: true,
-            saturday: true,
-            sunday: true
-          }
-        });
-        setDialogOpen(false);
-        
-        toast({
-          title: "Schedule Added",
-          description: "Your feeding schedule has been added successfully",
-        });
+        if (error) throw error;
       } catch (error) {
         console.error("Error adding schedule:", error);
         toast({

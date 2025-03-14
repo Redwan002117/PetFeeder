@@ -20,8 +20,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Wifi, Signal, RefreshCw, WifiOff, Lock, Loader2 } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
-import { getWifiNetworks, setWifiCredentials, getDeviceStatus } from "@/lib/firebase";
+import { useAuth } from "@/contexts/SupabaseAuthContext";
+import { getWifiNetworks, setWifiCredentials, getDeviceStatus } from "@/lib/device-utils";
 import { useToast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
 import PageHeader from "@/components/PageHeader";
@@ -50,43 +50,48 @@ const Connectivity = ({ standalone = true }: ConnectivityProps) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser?.id) return;
 
-    setLoading(true);
-    setError(null);
+    const fetchWifiNetworks = async () => {
+      setScanning(true);
+      try {
+        const networks = await getWifiNetworks(currentUser.id);
+        setAvailableNetworks(networks);
+      } catch (error) {
+        console.error('Error scanning networks:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to scan WiFi networks',
+          variant: 'destructive',
+        });
+      } finally {
+        setScanning(false);
+      }
+    };
 
-    try {
-      // Use our safe getWifiNetworks function
-      const unsubscribe = getWifiNetworks(currentUser.uid, (data) => {
-        setLoading(false);
-        if (data && data.networks) {
-          setNetworks(data.networks);
-        } else {
-          // Provide default networks if none are available
-          setNetworks([
-            { ssid: 'WiFi Network 1', strength: 'Strong', secured: true },
-            { ssid: 'WiFi Network 2', strength: 'Medium', secured: true },
-            { ssid: 'WiFi Network 3', strength: 'Weak', secured: false }
-          ]);
+    fetchWifiNetworks();
+
+    // Set up real-time subscription for device status
+    const subscription = supabase
+      .channel('device_status')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'device_status',
+          filter: `device_id=eq.${currentUser.id}`
+        },
+        (payload) => {
+          setDeviceStatus(payload.new);
         }
-      });
+      )
+      .subscribe();
 
-      return () => {
-        if (unsubscribe) unsubscribe();
-      };
-    } catch (error) {
-      console.error("Error loading WiFi networks:", error);
-      setLoading(false);
-      setError("Failed to load WiFi networks. Please try again later.");
-      
-      // Provide default networks if there's an error
-      setNetworks([
-        { ssid: 'WiFi Network 1', strength: 'Strong', secured: true },
-        { ssid: 'WiFi Network 2', strength: 'Medium', secured: true },
-        { ssid: 'WiFi Network 3', strength: 'Weak', secured: false }
-      ]);
-    }
-  }, [currentUser]);
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [currentUser, toast]);
 
   useEffect(() => {
     if (currentUser) {

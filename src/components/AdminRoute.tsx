@@ -1,5 +1,5 @@
 import { Navigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { Spinner } from './ui/spinner';
 
 export function AdminRoute({ children }: { children: React.ReactNode }) {

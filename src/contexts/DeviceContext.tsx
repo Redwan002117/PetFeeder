@@ -1,31 +1,31 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { off } from 'firebase/database';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { database, initializeFirebase } from '@/lib/firebase';
-import { safeRef, safeSet, safeUpdate, safeOnValue } from '@/lib/firebase-utils';
-
-// Ensure Firebase is initialized
-initializeFirebase();
+import { supabase, testConnection } from '@/lib/supabase-config';
 
 interface DeviceData {
+  id: string;
+  created_at: string;
+  owner_id: string;
   name: string;
-  status: string;
-  foodLevel: number;
-  lastSeen: number;
-  wifiConfig?: {
+  status: 'online' | 'offline';
+  food_level: number;
+  last_seen: string | null;
+  wifi_config: {
     ssid: string;
     password: string;
-    hotspotEnabled: boolean;
-    hotspotName: string;
-    hotspotPassword: string;
+    hotspot_enabled: boolean;
+    hotspot_name: string;
+    hotspot_password: string;
   };
+  model?: string;
+  firmware_version?: string;
 }
 
 interface DeviceContextType {
   device: DeviceData | null;
   loading: boolean;
-  updateWiFiConfig: (config: DeviceData['wifiConfig']) => Promise<void>;
+  updateWiFiConfig: (config: DeviceData['wifi_config']) => Promise<void>;
   updateDeviceName: (name: string) => Promise<void>;
   triggerFeed: (amount: number) => Promise<void>;
   databaseAvailable: boolean;
@@ -55,94 +55,114 @@ export function DeviceProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    setLoading(true);
-
-    // Make sure Firebase is initialized
-    initializeFirebase();
-
-    // If database is not available, show an error
-    if (!database) {
-      console.error('Firebase database is not available');
-      setDatabaseAvailable(false);
-      toast({
-        title: 'Connection Error',
-        description: 'Could not connect to the device database. Please try again later.',
-        variant: 'destructive',
-      });
-      setLoading(false);
-      return;
-    }
-
-    // Database is available
-    setDatabaseAvailable(true);
-
-    // Use our safe onValue function instead of direct onValue
-    const unsubscribe = safeOnValue(
-      `devices/${currentUser.uid}`,
-      (snapshot: any) => {
-        setLoading(false);
-        if (snapshot.exists()) {
-          setDevice(snapshot.val());
-        } else {
-          // Create a default device if none exists
-          const defaultDevice: DeviceData = {
-            name: 'My PetFeeder',
-            status: 'offline',
-            foodLevel: 0,
-            lastSeen: Date.now(),
-            wifiConfig: {
-              ssid: '',
-              password: '',
-              hotspotEnabled: false,
-              hotspotName: 'PetFeeder_' + currentUser.uid.substring(0, 5),
-              hotspotPassword: 'petfeeder'
-            }
-          };
-          
-          safeSet(`devices/${currentUser.uid}`, defaultDevice)
-            .then((success) => {
-              if (success) {
-                setDevice(defaultDevice);
-              } else {
-                console.error('Failed to create default device');
-                toast({
-                  title: 'Error',
-                  description: 'Failed to create your device profile. Please try again later.',
-                  variant: 'destructive',
-                });
-              }
-            })
-            .catch(error => {
-              console.error('Error creating default device:', error);
-              toast({
-                title: 'Error',
-                description: 'Failed to create your device profile. Please try again later.',
-                variant: 'destructive',
-              });
-            });
+    const initialize = async () => {
+      setLoading(true);
+      try {
+        const isConnected = await testConnection();
+        if (!isConnected) {
+          setDatabaseAvailable(false);
+          toast({
+            title: 'Connection Error',
+            description: 'Could not connect to the database',
+            variant: 'destructive',
+          });
+          return;
         }
-      },
-      (error: any) => {
-        console.error('Error fetching device data:', error);
-        setLoading(false);
+        setDatabaseAvailable(true);
+        await fetchDevice();
+      } catch (error) {
+        console.error('Connection initialization error:', error);
         setDatabaseAvailable(false);
         toast({
-          title: 'Connection Error',
-          description: 'Could not fetch device data. Please check your connection and try again.',
+          title: 'Error',
+          description: 'Could not establish database connection',
           variant: 'destructive',
         });
       }
-    );
+    };
+
+    initialize();
+
+    const fetchDevice = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('devices')
+          .select('id, created_at, owner_id, name, status, food_level, last_seen, wifi_config, model, firmware_version')
+          .eq('owner_id', currentUser.id)
+          .maybeSingle();
+
+        if (error && error.code !== 'PGRST116') {
+          throw error;
+        }
+
+        if (data) {
+          setDevice(data as DeviceData);
+        } else {
+          // Create default device with snake_case keys
+          const defaultDevice: Partial<DeviceData> = {
+            name: 'My PetFeeder',
+            status: 'offline',
+            food_level: 0,
+            wifi_config: {
+              ssid: '',
+              password: '',
+              hotspot_enabled: false,
+              hotspot_name: `PetFeeder_${currentUser.id.substring(0, 5)}`,
+              hotspot_password: Math.random().toString(36).slice(-8)
+            }
+          };
+
+          const { error: insertError } = await supabase
+            .from('devices')
+            .insert([{ 
+              ...defaultDevice, 
+              owner_id: currentUser.id 
+            }]);
+
+          if (insertError) {
+            throw insertError;
+          }
+
+          setDevice(defaultDevice as DeviceData);
+        }
+      } catch (error: any) {
+        console.error('Error managing device:', error);
+        setDatabaseAvailable(false);
+        toast({
+          title: 'Error',
+          description: 'Could not fetch or create device data',
+          variant: 'destructive',
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    // Set up realtime subscription
+    const channel = supabase
+      .channel('device_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'devices',
+          filter: `owner_id=eq.${currentUser.id}`
+        },
+        (payload) => {
+          if (payload.new) {
+            setDevice(payload.new as DeviceData);
+          }
+        }
+      )
+      .subscribe();
 
     return () => {
-      // Clean up the listener
-      if (unsubscribe) {
-        unsubscribe();
-      }
+      supabase.removeChannel(channel);
     };
   }, [currentUser, toast]);
 
-  const updateWiFiConfig = async (config: DeviceData['wifiConfig']) => {
+  const updateWiFiConfig = async (config: DeviceData['wifi_config']) => {
     if (!currentUser || !device) {
       toast({
         title: 'Error',
@@ -152,35 +172,25 @@ export function DeviceProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (!databaseAvailable) {
+    const { error } = await supabase
+      .from('devices')
+      .update({ wifi_config: config })
+      .eq('owner_id', currentUser.id);
+
+    if (error) {
+      console.error('Error updating WiFi config:', error);
       toast({
-        title: 'Connection Error',
-        description: 'Database is not available. Please try again later.',
+        title: 'Error',
+        description: 'Failed to update WiFi configuration',
         variant: 'destructive',
       });
       return;
     }
 
-    try {
-      const success = await safeUpdate(`devices/${currentUser.uid}/wifiConfig`, config);
-      
-      if (success) {
-        toast({
-          title: 'Success',
-          description: 'WiFi configuration updated successfully.',
-          variant: 'default',
-        });
-      } else {
-        throw new Error('Failed to update WiFi configuration');
-      }
-    } catch (error) {
-      console.error('Error updating WiFi config:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to update WiFi configuration. Please try again.',
-        variant: 'destructive',
-      });
-    }
+    toast({
+      title: 'Success',
+      description: 'WiFi configuration updated successfully',
+    });
   };
 
   const updateDeviceName = async (name: string) => {
@@ -193,35 +203,26 @@ export function DeviceProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (!databaseAvailable) {
-      toast({
-        title: 'Connection Error',
-        description: 'Database is not available. Please try again later.',
-        variant: 'destructive',
-      });
-      return;
-    }
+    const { error } = await supabase
+      .from('devices')
+      .update({ name })
+      .eq('owner_id', currentUser.id);
 
-    try {
-      const success = await safeUpdate(`devices/${currentUser.uid}`, { name });
-      
-      if (success) {
-        toast({
-          title: 'Success',
-          description: 'Device name updated successfully.',
-          variant: 'default',
-        });
-      } else {
-        throw new Error('Failed to update device name');
-      }
-    } catch (error) {
+    if (error) {
       console.error('Error updating device name:', error);
       toast({
         title: 'Error',
         description: 'Failed to update device name. Please try again.',
         variant: 'destructive',
       });
+      return;
     }
+
+    toast({
+      title: 'Success',
+      description: 'Device name updated successfully.',
+      variant: 'default',
+    });
   };
 
   const triggerFeed = async (amount: number) => {
@@ -234,44 +235,25 @@ export function DeviceProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (!databaseAvailable) {
-      toast({
-        title: 'Connection Error',
-        description: 'Database is not available. Please try again later.',
-        variant: 'destructive',
-      });
-      return;
-    }
+    const { error } = await supabase
+      .from('feeding_requests')
+      .insert([{ user_id: currentUser.id, amount, timestamp: Date.now(), status: 'pending' }]);
 
-    try {
-      const feedingRef = safeRef(`feeding_requests/${currentUser.uid}`);
-      if (!feedingRef) {
-        throw new Error('Failed to create feeding request reference');
-      }
-      
-      const success = await safeSet(feedingRef, {
-        amount,
-        timestamp: Date.now(),
-        status: 'pending'
-      });
-      
-      if (success) {
-        toast({
-          title: 'Success',
-          description: `Feeding request sent (${amount} units).`,
-          variant: 'default',
-        });
-      } else {
-        throw new Error('Failed to send feeding request');
-      }
-    } catch (error) {
+    if (error) {
       console.error('Error triggering feed:', error);
       toast({
         title: 'Error',
         description: 'Failed to send feeding request. Please try again.',
         variant: 'destructive',
       });
+      return;
     }
+
+    toast({
+      title: 'Success',
+      description: `Feeding request sent (${amount} units).`,
+      variant: 'default',
+    });
   };
 
   const value = {
@@ -288,4 +270,4 @@ export function DeviceProvider({ children }: { children: React.ReactNode }) {
       {children}
     </DeviceContext.Provider>
   );
-} 
+}

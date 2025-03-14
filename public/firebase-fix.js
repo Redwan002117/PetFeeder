@@ -8,10 +8,11 @@
       event.message.includes('database') ||
       event.message.includes('firestore')
     )) {
-      console.warn('Firebase error caught by global handler:', event.message);
+      console.warn('Firebase error caught by global handler:', JSON.stringify(event.message));
       
       // Prevent the error from showing in the console
       event.preventDefault();
+
       
       // You could also show a user-friendly message here
       if (!window.firebaseErrorShown) {

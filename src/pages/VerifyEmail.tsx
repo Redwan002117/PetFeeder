@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { applyActionCode, sendEmailVerification } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Mail, CheckCircle, AlertCircle, ArrowLeft, Loader2, RefreshCw } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { motion } from 'framer-motion';
+import { supabase } from '@/lib/supabase';
 
 const VerifyEmail = () => {
   const { currentUser } = useAuth();
@@ -47,11 +46,13 @@ const VerifyEmail = () => {
     setError(null);
     
     try {
-      await applyActionCode(auth, code);
-      setVerified(true);
+      const { error } = await supabase.auth.verifyOtp({
+        token: code,
+        type: 'signup'
+      });
       
-      // Reload the user to update the emailVerified property
-      await currentUser?.reload();
+      if (error) throw error;
+      setVerified(true);
       
       toast({
         title: "Email Verified",
@@ -82,7 +83,11 @@ const VerifyEmail = () => {
     setError(null);
     
     try {
-      await sendEmailVerification(currentUser);
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: currentUser.email || ''
+      });
+      if (error) throw error;
       setEmailSent(true);
       setCountdown(60); // Start a 60-second countdown
       
@@ -100,6 +105,24 @@ const VerifyEmail = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const verifyEmail = async () => {
+    if (!currentUser) return;
+    
+    try {
+      const { error } = await supabase.auth.verifyOtp({
+        email: currentUser.email,
+        token: verificationCode,
+        type: 'email'
+      });
+      
+      if (error) throw error;
+      
+      // Success handling
+    } catch (error) {
+      // Error handling
     }
   };
 
@@ -243,4 +266,4 @@ const VerifyEmail = () => {
   );
 };
 
-export default VerifyEmail; 
+export default VerifyEmail;

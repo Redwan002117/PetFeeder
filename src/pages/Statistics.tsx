@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/SupabaseAuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getFeedingHistory } from "@/lib/firebase";
+import { getFeedingHistory, getDeviceStatistics } from "@/lib/statistics-utils";
 import { format, subDays, startOfDay, endOfDay, startOfWeek, endOfWeek, 
          startOfMonth, endOfMonth, eachDayOfInterval } from "date-fns";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -21,28 +21,34 @@ const Statistics = () => {
   const { currentUser } = useAuth();
   const [feedingHistory, setFeedingHistory] = useState<any[]>([]);
   const [timeRange, setTimeRange] = useState("week");
+  const [loading, setLoading] = useState(false);
+  const [deviceStats, setDeviceStats] = useState(null);
   
   useEffect(() => {
-    if (currentUser) {
-      const unsubscribe = getFeedingHistory(currentUser.uid, (data) => {
-        if (data) {
-          const historyArray = Object.keys(data).map(key => ({
-            id: key,
-            ...data[key],
-            timestamp: data[key].timestamp || Date.now()
-          }));
-          
-          // Sort by timestamp (most recent first)
-          const sortedHistory = historyArray.sort((a, b) => b.timestamp - a.timestamp);
-          setFeedingHistory(sortedHistory);
-        } else {
-          setFeedingHistory([]);
-        }
-      });
-      
-      return () => unsubscribe();
-    }
-  }, [currentUser]);
+    if (!currentUser) return;
+
+    const fetchHistory = async () => {
+      setLoading(true);
+      try {
+        const data = await getFeedingHistory(currentUser.id, startDate, endDate);
+        setFeedingHistory(data);
+
+        const stats = await getDeviceStatistics(currentUser.id);
+        setDeviceStats(stats);
+      } catch (error) {
+        console.error('Error fetching history:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to fetch feeding history',
+          variant: 'destructive',
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchHistory();
+  }, [currentUser, startDate, endDate]);
   
   const getFilteredData = () => {
     const today = new Date();
