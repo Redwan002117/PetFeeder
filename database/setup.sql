@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   username text unique,
   full_name text,
   avatar_url text,
+  email text,
   is_admin boolean default false,
   email_verified boolean default false,
   created_at timestamp with time zone default timezone('utc'::text, now()),
@@ -195,12 +196,14 @@ BEGIN
     id, 
     username, 
     full_name,
+    email,
     email_verified
   )
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'username', split_part(NEW.email, '@', 1)),
     COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
+    NEW.email,
     NEW.email_confirmed_at IS NOT NULL
   );
 

@@ -20,7 +20,7 @@ export const getDevices = async (userId: string): Promise<Device[]> => {
   const { data, error } = await supabase
     .from('devices')
     .select('*')
-    .eq('user_id', userId);
+    .eq('owner_id', userId);
 
   if (error) throw error;
   return data || [];

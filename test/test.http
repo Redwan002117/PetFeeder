@@ -1,8 +1,0 @@
-POST https://api-inference.huggingface.co/models/bigcode/starcoder
-Authorization: Bearer [YOUR_API_TOKEN_HERE]
-Content-Type: application/json
-
-{
-  "inputs": "def fibonacci(n):",
-  "parameters": {"max_length": 100}
-}

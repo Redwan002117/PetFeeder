@@ -134,9 +134,10 @@ export function SupabaseAuthProvider({ children }: { children: React.ReactNode }
       if (profileError) throw profileError;
 
       if (profile) {
+        // Use email from profile if available, otherwise fallback to auth user email
         setUserData({
           ...profile,
-          email: user.email || '',
+          email: profile.email || user.email || '',
           email_verified: user.email_confirmed_at != null,
           preferences: profile.preferences
         });

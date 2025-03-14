@@ -63,6 +63,7 @@ const Register = () => {
           data: {
             username,
             full_name: name,
+            email: email,
             avatar_url: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`
           }
         }

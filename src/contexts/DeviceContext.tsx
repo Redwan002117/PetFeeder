@@ -1,7 +1,27 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { supabase, testConnection } from '@/lib/supabase-config';
+import { supabase } from '@/lib/supabase';
+
+// Simple connection test function
+const testConnection = async (retries = 3): Promise<boolean> => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const { data, error } = await supabase.auth.getSession();
+      if (!error) {
+        console.log('Supabase connection successful');
+        return true;
+      }
+      
+      console.warn(`Connection attempt ${i + 1} failed, retrying...`, error);
+      if (i < retries - 1) await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+    } catch (error) {
+      console.error(`Connection attempt ${i + 1} failed:`, error);
+      if (i < retries - 1) await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+    }
+  }
+  return false;
+};
 
 interface DeviceData {
   id: string;

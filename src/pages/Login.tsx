@@ -79,26 +79,20 @@ const Login = () => {
           password: password,
         });
       } else {
-        // If it's a username, first query the profiles table to get the user id
+        // If it's a username, we need to find the corresponding email from the profiles table
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
-          .select('id')
+          .select('email')
           .eq('username', emailOrUsername)
           .single();
-          
-        if (profileError) {
-          throw new Error('Username not found. Please check your credentials.');
+        
+        if (profileError || !profileData?.email) {
+          throw new Error('Username not found. Please check your username or use your email address.');
         }
         
-        // Get the user's email from auth.users using the id from profiles
-        const { data: userData, error: userError } = await supabase.auth.admin.getUserById(profileData.id);
-        
-        if (userError || !userData) {
-          throw new Error('Could not retrieve user information. Please try again.');
-        }
-        
+        // Now use the email from the profile to authenticate
         authResponse = await supabase.auth.signInWithPassword({
-          email: userData.user.email,
+          email: profileData.email,
           password: password,
         });
       }

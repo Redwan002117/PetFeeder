@@ -9,6 +9,7 @@ import ProfileAvatar from '@/components/ProfileAvatar';
 import { motion } from 'framer-motion';
 import { getDeviceStatus, getDevices, getLastFeeding } from '@/lib/home-utils';
 import { toast } from "sonner";
+import { supabase } from '@/lib/supabase';
 
 function Home() {
   const { currentUser } = useAuth();
@@ -19,6 +20,8 @@ function Home() {
   const [lastFeeding, setLastFeeding] = useState<any>(null);
   const [nextScheduledFeeding, setNextScheduledFeeding] = useState<string | null>(null);
   const [scheduledFeedings, setScheduledFeedings] = useState<number>(0);
+  const [loading, setLoading] = useState(true);
+  const [devices, setDevices] = useState<any[]>([]);
 
   // Animation variants
   const containerVariants = {
@@ -87,7 +90,7 @@ function Home() {
           event: '*',
           schema: 'public',
           table: 'devices',
-          filter: `user_id=eq.${currentUser.id}`
+          filter: `owner_id=eq.${currentUser.id}`
         },
         (payload) => {
           // Update device data when changes occur
