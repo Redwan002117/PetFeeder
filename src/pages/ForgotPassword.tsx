@@ -7,8 +7,8 @@ import { useToast } from "@/components/ui/use-toast";
 import { Mail, ArrowLeft, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { motion } from "framer-motion";
-import { sendPasswordResetEmail } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { sendPasswordResetEmail } from "@/lib/supabase";
+// Using
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState("");
@@ -28,7 +28,7 @@ const ForgotPassword = () => {
 
     try {
       setLoading(true);
-      await sendPasswordResetEmail(auth, email);
+      await sendPasswordResetEmail(email);
       setSuccess(true);
       toast({
         title: "Reset Email Sent",
@@ -200,4 +200,4 @@ const ForgotPassword = () => {
   );
 };
 
-export default ForgotPassword; 
+export default ForgotPassword;

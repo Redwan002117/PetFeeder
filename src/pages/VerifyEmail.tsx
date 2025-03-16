@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { applyActionCode, sendEmailVerification } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { applyActionCode, sendVerificationEmail } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -47,11 +46,10 @@ const VerifyEmail = () => {
     setError(null);
     
     try {
-      await applyActionCode(auth, code);
+      // Supabase handles verification automatically via URL
+      // This is just to update the UI state
+      await applyActionCode(null, code);
       setVerified(true);
-      
-      // Reload the user to update the emailVerified property
-      await currentUser?.reload();
       
       toast({
         title: "Email Verified",
@@ -82,7 +80,7 @@ const VerifyEmail = () => {
     setError(null);
     
     try {
-      await sendEmailVerification(currentUser);
+      await sendVerificationEmail(currentUser);
       setEmailSent(true);
       setCountdown(60); // Start a 60-second countdown
       
@@ -243,4 +241,4 @@ const VerifyEmail = () => {
   );
 };
 
-export default VerifyEmail; 
+export default VerifyEmail;

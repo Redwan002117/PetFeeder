@@ -18,7 +18,7 @@ A modern web application for managing smart pet feeders. Control feeding schedul
 - React 18
 - TypeScript
 - Vite
-- Firebase
+- Supabase
 - TailwindCSS
 - React Router
 - React Hot Toast
@@ -29,7 +29,7 @@ A modern web application for managing smart pet feeders. Control feeding schedul
 
 - Node.js 18+
 - npm 8+
-- Firebase account
+- Supabase account
 
 ### Installation
 
@@ -46,7 +46,7 @@ npm install
 
 3. Create environment files:
    - Copy `.env.example` to `.env.development` and `.env.production`
-   - Fill in your Firebase credentials
+   - Fill in your Supabase credentials
 
 4. Start development server:
 ```bash
@@ -67,24 +67,22 @@ npm run preview
 
 ### Deployment
 
-The application can be deployed to Firebase Hosting:
+The application can be deployed to GitHub Pages:
 
-1. Install Firebase CLI:
+1. Install the gh-pages package (if not already installed):
 ```bash
-npm install -g firebase-tools
+npm install --save-dev gh-pages
 ```
 
-2. Login to Firebase:
-```bash
-firebase login
+2. Make sure your package.json has the correct homepage and deploy script:
+```json
+"homepage": "https://petfeeder.redwancodes.com",
+"scripts": {
+  "deploy": "gh-pages -d dist"
+}
 ```
 
-3. Initialize Firebase:
-```bash
-firebase init
-```
-
-4. Deploy:
+3. Deploy:
 ```bash
 npm run deploy
 ```

@@ -1,0 +1,19 @@
+C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino:110:6: error: default argument given for parameter 2 of 'void debugPrint(String, bool)' [-fpermissive]
+  110 | void debugPrint(String message, bool newLine = true) {
+      |      ^~~~~~~~~~
+C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino:106:6: note: previous specification in 'void debugPrint(String, bool)' here
+  106 | void debugPrint(String message, bool newLine = true);
+      |      ^~~~~~~~~~
+C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino:133:6: error: default argument given for parameter 2 of 'void debugBlink(int, int)' [-fpermissive]
+  133 | void debugBlink(int times, int speed = DEBUG_BLINK_DURATION) {
+      |      ^~~~~~~~~~
+C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino:107:6: note: previous specification in 'void debugBlink(int, int)' here
+  107 | void debugBlink(int times, int speed = DEBUG_BLINK_DURATION);
+      |      ^~~~~~~~~~
+C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino:599:1: error: expected declaration before '}' token
+  599 | }
+      | ^
+
+exit status 1
+
+Compilation error: default argument given for parameter 2 of 'void debugPrint(String, bool)' [-fpermissive]

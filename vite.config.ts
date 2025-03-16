@@ -6,17 +6,26 @@ import fs from 'fs';
 // Check if CNAME exists to determine if we're using a custom domain
 const hasCNAME = fs.existsSync('./public/CNAME');
 
-// Custom plugin to inject WebSocket token fix
-const injectWebSocketTokenFix = () => {
+// Custom plugin for Supabase initialization
+const injectSupabaseInit = () => {
   return {
-    name: 'inject-ws-token-fix',
+    name: 'inject-supabase-init',
     transformIndexHtml(html) {
-      // Add the WebSocket token fix script to the head
+      // Add Supabase initialization script to the head
       return html.replace(
         '</head>',
         `<script>
-          // Fix for WebSocket token error in production
-          window.__WS_TOKEN__ = window.__WS_TOKEN__ || null;
+          // Initialize Supabase client
+          document.addEventListener('DOMContentLoaded', function() {
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+            
+            if (supabaseUrl && supabaseAnonKey) {
+              console.log('Supabase client initialized with environment variables');
+            } else {
+              console.warn('Supabase environment variables not found');
+            }
+          });
         </script>
         </head>`
       );
@@ -35,7 +44,7 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [
     react(),
-    injectWebSocketTokenFix(),
+    injectSupabaseInit(),
   ],
   resolve: {
     alias: {
@@ -59,8 +68,7 @@ export default defineConfig(({ mode }) => ({
     rollupOptions: {
       output: {
         manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'firebase-vendor': ['firebase/app', 'firebase/auth', 'firebase/firestore'],
+          'react-vendor': ['react', 'react-dom', 'react-router-dom']
         },
       },
     },

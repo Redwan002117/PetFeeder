@@ -85,11 +85,11 @@ export function ESP32Guide() {
           </Button>
           <Button 
             variant="ghost" 
-            className={`w-full justify-start ${activeSection === 'firebase-integration' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
-            onClick={() => scrollToSection('firebase-integration')}
+            className={`w-full justify-start ${activeSection === 'supabase-integration' ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+            onClick={() => scrollToSection('supabase-integration')}
           >
             <Database className="mr-2 h-4 w-4" />
-            Firebase Integration
+            Supabase Integration
           </Button>
           <Button 
             variant="ghost" 
@@ -117,26 +117,94 @@ export function ESP32Guide() {
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Components</h3>
               <ul className="list-disc list-inside space-y-2">
-                <li>ESP32 Development Board</li>
-                <li>Servo Motor (connected to GPIO 13)</li>
-                <li>Ultrasonic Sensor (connected to GPIO 34)</li>
-                <li>Status LED (GPIO 2)</li>
-                <li>Manual Feed Button (GPIO 4)</li>
+                <li><strong>ESP32 Development Board</strong> - Main microcontroller (recommended: ESP32-WROOM-32)</li>
+                <li><strong>Servo Motor</strong> - For dispensing food (connected to GPIO 13, SG90 or MG996R)</li>
+                <li><strong>Ultrasonic Sensor</strong> - For food level detection (HC-SR04, TRIG: GPIO 12, ECHO: GPIO 14)</li>
+                <li><strong>Status LED</strong> - For visual feedback (GPIO 2, standard 5mm LED with resistor)</li>
+                <li><strong>Manual Feed Button</strong> - For physical feed trigger (GPIO 4, momentary push button)</li>
+                <li><strong>Battery Level Sensor</strong> - Optional, for monitoring power (GPIO 35, voltage divider circuit)</li>
+                <li><strong>Power Supply</strong> - 5V/2A DC adapter or 18650 Li-ion battery with charger circuit</li>
+                <li><strong>Food Container</strong> - Plastic container with dispensing mechanism</li>
+                <li><strong>Jumper Wires</strong> - For connecting components</li>
+                <li><strong>Breadboard/PCB</strong> - For mounting components</li>
+                <li><strong>Resistors</strong> - 220Ω for LED, 10kΩ for button pull-down</li>
+                <li><strong>Capacitors</strong> - 100μF electrolytic for power stabilization</li>
+              </ul>
+
+              <h3 className="text-lg font-semibold mt-4">Pin Connections</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700">
+                  <thead>
+                    <tr className="bg-gray-100 dark:bg-gray-700">
+                      <th className="py-2 px-4 border-b">Component</th>
+                      <th className="py-2 px-4 border-b">ESP32 Pin</th>
+                      <th className="py-2 px-4 border-b">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td className="py-2 px-4 border-b">Servo Motor Signal</td>
+                      <td className="py-2 px-4 border-b">GPIO 13</td>
+                      <td className="py-2 px-4 border-b">PWM signal for servo control</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2 px-4 border-b">Ultrasonic TRIG</td>
+                      <td className="py-2 px-4 border-b">GPIO 12</td>
+                      <td className="py-2 px-4 border-b">Trigger pin for HC-SR04</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2 px-4 border-b">Ultrasonic ECHO</td>
+                      <td className="py-2 px-4 border-b">GPIO 14</td>
+                      <td className="py-2 px-4 border-b">Echo pin for HC-SR04</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2 px-4 border-b">Status LED</td>
+                      <td className="py-2 px-4 border-b">GPIO 2</td>
+                      <td className="py-2 px-4 border-b">With 220Ω resistor</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2 px-4 border-b">Manual Feed Button</td>
+                      <td className="py-2 px-4 border-b">GPIO 4</td>
+                      <td className="py-2 px-4 border-b">With 10kΩ pull-down resistor</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2 px-4 border-b">Battery Level</td>
+                      <td className="py-2 px-4 border-b">GPIO 35</td>
+                      <td className="py-2 px-4 border-b">Analog input, voltage divider</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <h3 className="text-lg font-semibold mt-4">Power Requirements</h3>
+              <ul className="list-disc list-inside space-y-2">
+                <li><strong>Input Voltage:</strong> 5V DC</li>
+                <li><strong>Current:</strong> 2A recommended (servo may draw up to 1A during operation)</li>
+                <li><strong>Battery Option:</strong> 3.7V 18650 Li-ion with boost converter to 5V</li>
+                <li><strong>Power Consumption:</strong>
+                  <ul className="list-none ml-6">
+                    <li>- Sleep mode: ~20mA</li>
+                    <li>- Active (WiFi on): ~80-120mA</li>
+                    <li>- During feeding: ~500-1000mA</li>
+                  </ul>
+                </li>
               </ul>
 
               <h3 className="text-lg font-semibold mt-4">Assembly Instructions</h3>
               <ol className="list-decimal list-inside space-y-2">
-                <li>Mount the ESP32 board securely</li>
-                <li>Connect servo motor for food dispensing</li>
-                <li>Install ultrasonic sensor for food level</li>
-                <li>Wire the manual feed button</li>
-                <li>Connect status LED</li>
+                <li>Mount the ESP32 board securely on breadboard or PCB</li>
+                <li>Connect servo motor for food dispensing mechanism</li>
+                <li>Install ultrasonic sensor at top of food container</li>
+                <li>Wire the manual feed button to front panel</li>
+                <li>Connect status LED in visible location</li>
+                <li>Add power supply connections with appropriate regulation</li>
+                <li>Secure all connections with appropriate insulation</li>
               </ol>
 
               <div className="bg-yellow-50 p-4 rounded-md mt-4">
                 <p className="text-sm text-yellow-800">
                   Important: Double-check all connections before powering on the device.
-                  Incorrect wiring may damage the components.
+                  Incorrect wiring may damage the components. Ensure proper polarity for power connections.
                 </p>
               </div>
             </div>
@@ -153,9 +221,10 @@ export function ESP32Guide() {
                 <li>Required libraries:
                   <ul className="list-none ml-6">
                     <li>- WiFiManager</li>
-                    <li>- FirebaseESP32</li>
                     <li>- ArduinoJson</li>
                     <li>- ESP32Servo</li>
+                    <li>- HTTPClient</li>
+                    <li>- WiFiClientSecure</li>
                     <li>- NTPClient</li>
                   </ul>
                 </li>
@@ -279,42 +348,63 @@ export function ESP32Guide() {
           </AccordionContent>
         </AccordionItem>
 
-        <AccordionItem value="firebase-integration" id="firebase-integration">
-          <AccordionTrigger>Firebase Integration</AccordionTrigger>
+        <AccordionItem value="supabase-integration" id="supabase-integration">
+          <AccordionTrigger>Supabase Integration</AccordionTrigger>
           <AccordionContent>
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Firebase Configuration</h3>
+              <h3 className="text-lg font-semibold">Supabase Configuration</h3>
               <p>
-                The PetFeeder device uses Firebase Realtime Database to store and sync data in real-time.
+                The PetFeeder device uses Supabase to store and sync data in real-time.
                 This allows for seamless communication between the device and the web application.
               </p>
               
               <h4 className="text-md font-semibold mt-4">Setup Steps</h4>
               <ol className="list-decimal list-inside space-y-2">
-                <li>Create a Firebase project in the Firebase Console</li>
-                <li>Set up Realtime Database with appropriate security rules</li>
-                <li>Update the firmware with your Firebase credentials:
+                <li>Create a Supabase project in the Supabase Dashboard</li>
+                <li>Set up appropriate database tables with Row Level Security (RLS) policies</li>
+                <li>Update the firmware with your Supabase credentials:
                   <pre className="bg-gray-100 dark:bg-gray-800 p-3 rounded-md mt-2 overflow-x-auto text-sm">
                     <code>
-                      #define FIREBASE_HOST "catfeeder002117-default-rtdb.asia-southeast1.firebasedatabase.app"<br/>
-                      #define FIREBASE_AUTH "AIzaSyDFEVV0zXBXeZkzdcVz6sARU5pHxJL80N4"
+                      #define SUPABASE_URL "https://your-project-id.supabase.co"<br/>
+                      #define SUPABASE_API_KEY "your-supabase-anon-key"<br/>
+                      #define SUPABASE_JWT_TOKEN "your-jwt-token" // Generated after user authentication
                     </code>
                   </pre>
                 </li>
               </ol>
 
               <h4 className="text-md font-semibold mt-4">Database Structure</h4>
-              <p>The Firebase database is organized as follows:</p>
+              <p>The Supabase database is organized with the following tables:</p>
               <pre className="bg-gray-100 dark:bg-gray-800 p-3 rounded-md mt-2 overflow-x-auto text-sm">
                 <code>
-                  /devices/{'{deviceID}'} - Device information<br/>
-                  &nbsp;&nbsp;/status - Online/offline status<br/>
-                  &nbsp;&nbsp;/foodLevel - Current food level percentage<br/>
-                  &nbsp;&nbsp;/lastSeen - Timestamp of last connection<br/>
-                  &nbsp;&nbsp;/feedCommand - Pending feed commands<br/>
-                  &nbsp;&nbsp;/schedules - Feeding schedules<br/>
-                  &nbsp;&nbsp;/feedingHistory - Record of feeding events<br/>
-                  &nbsp;&nbsp;/alerts - System alerts and notifications
+                  devices - Device information<br/>
+                  &nbsp;&nbsp;id - Device ID (MAC address)<br/>
+                  &nbsp;&nbsp;status - Online/offline status<br/>
+                  &nbsp;&nbsp;food_level - Current food level percentage<br/>
+                  &nbsp;&nbsp;last_seen - Timestamp of last connection<br/>
+                  &nbsp;&nbsp;user_id - Owner of the device<br/>
+                  <br/>
+                  feeding_schedules - Scheduled feeding times<br/>
+                  &nbsp;&nbsp;id - Schedule ID<br/>
+                  &nbsp;&nbsp;device_id - Associated device<br/>
+                  &nbsp;&nbsp;time - Time to feed<br/>
+                  &nbsp;&nbsp;amount - Amount to dispense<br/>
+                  &nbsp;&nbsp;days - Array of days (Sun-Sat)<br/>
+                  &nbsp;&nbsp;enabled - Whether schedule is active<br/>
+                  <br/>
+                  feed_commands - Manual feed commands<br/>
+                  &nbsp;&nbsp;id - Command ID<br/>
+                  &nbsp;&nbsp;device_id - Target device<br/>
+                  &nbsp;&nbsp;amount - Amount to dispense<br/>
+                  &nbsp;&nbsp;status - pending/completed/failed<br/>
+                  &nbsp;&nbsp;created_at - When command was issued<br/>
+                  <br/>
+                  feeding_history - Record of feeding events<br/>
+                  &nbsp;&nbsp;id - Event ID<br/>
+                  &nbsp;&nbsp;device_id - Associated device<br/>
+                  &nbsp;&nbsp;amount - Amount dispensed<br/>
+                  &nbsp;&nbsp;type - manual/scheduled<br/>
+                  &nbsp;&nbsp;timestamp - When feeding occurred
                 </code>
               </pre>
 
@@ -340,9 +430,9 @@ export function ESP32Guide() {
               <ul className="list-disc list-inside space-y-2">
                 <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">setupHardware()</code> - Initializes pins and servo</li>
                 <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">setupWiFi()</code> - Configures WiFi using WiFiManager</li>
-                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">setupFirebase()</code> - Initializes Firebase connection</li>
+                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">setupSupabase()</code> - Initializes Supabase connection</li>
                 <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">setupNTP()</code> - Sets up time synchronization</li>
-                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">registerDevice()</code> - Registers device in Firebase</li>
+                <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">registerDevice()</code> - Registers device in Supabase</li>
               </ul>
 
               <h4 className="text-md font-semibold mt-4">Core Functions</h4>
@@ -384,9 +474,9 @@ export function ESP32Guide() {
           <AccordionTrigger>Real-time Synchronization</AccordionTrigger>
           <AccordionContent>
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Firebase Real-time Updates</h3>
+              <h3 className="text-lg font-semibold">Supabase Real-time Updates</h3>
               <p>
-                The PetFeeder device maintains real-time synchronization with the Firebase database,
+                The PetFeeder device maintains real-time synchronization with the Supabase database,
                 allowing for immediate updates and responses to user actions.
               </p>
               
@@ -464,4 +554,4 @@ export function ESP32Guide() {
       </Accordion>
     </div>
   );
-} 
+}
