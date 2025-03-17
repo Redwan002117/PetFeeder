@@ -9,7 +9,7 @@ import Layout from '@/components/Layout';
 export default function Documentation() {
   return (
     <Layout>
-      <div className="container mx-auto py-8 space-y-6">
+      <div className="container px-4 py-8 mx-auto">
         <div className="text-center">
           <h1 className="text-4xl font-bold mb-4">PetFeeder Documentation</h1>
           <p className="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
@@ -40,4 +40,4 @@ export default function Documentation() {
       </div>
     </Layout>
   );
-} 
+}

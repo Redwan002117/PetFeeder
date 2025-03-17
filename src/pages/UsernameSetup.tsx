@@ -1,160 +1,155 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useToast } from "@/components/ui/use-toast";
-import { updateProfile } from 'firebase/auth';
-import { FaUser } from "react-icons/fa";
-import { Loader2, User } from "lucide-react";
-import { database, ref, set, get, update } from '@/lib/firebase';
-import { serverTimestamp } from 'firebase/database';
-import PageHeader from "@/components/PageHeader";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2, AtSign, User } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 const UsernameSetup = () => {
   const [username, setUsername] = useState('');
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const { currentUser } = useAuth();
-  const { toast } = useToast();
+  const [usernameAvailable, setUsernameAvailable] = useState(true);
+  const [checking, setChecking] = useState(false);
+  
+  const { currentUser, updateUserProfile } = useAuth();
   const navigate = useNavigate();
-
+  const { toast } = useToast();
+  
+  // Prefill name from Google or other OAuth providers
   useEffect(() => {
-    // Check if user is coming from Google sign-in
-    const authMode = localStorage.getItem('authMode');
-    const pendingUsername = localStorage.getItem('pendingUsername');
-    
-    console.log("UsernameSetup: Current user:", currentUser);
-    console.log("UsernameSetup: Auth mode:", authMode);
-    console.log("UsernameSetup: Pending username:", pendingUsername);
-    
-    if (authMode === 'signup' && pendingUsername) {
-      // Pre-fill the username field
-      setUsername(pendingUsername);
-      
-      // Clear the local storage
-      localStorage.removeItem('authMode');
-      localStorage.removeItem('pendingUsername');
+    if (currentUser?.user_metadata?.full_name) {
+      setName(currentUser.user_metadata.full_name);
+    } else if (currentUser?.user_metadata?.name) {
+      setName(currentUser.user_metadata.name);
     }
     
-    // If no user is logged in, redirect to login
-    if (!currentUser) {
-      navigate('/login');
+    // Check localStorage for username (from OAuth signup flow)
+    const storedUsername = localStorage.getItem('signup_username');
+    if (storedUsername) {
+      setUsername(storedUsername);
+      localStorage.removeItem('signup_username'); // Clean up
+    } else if (currentUser?.email) {
+      // Generate suggested username from email
+      const emailUsername = currentUser.email.split('@')[0];
+      setUsername(emailUsername);
+    }
+  }, [currentUser]);
+  
+  // Debounced username availability check
+  useEffect(() => {
+    if (!username || username.length < 3) {
+      setUsernameAvailable(true);
       return;
     }
     
-    // Pre-fill name if available
-    if (currentUser.displayName) {
-      setName(currentUser.displayName);
-    }
+    const timer = setTimeout(async () => {
+      checkUsernameAvailability(username);
+    }, 500);
     
-    // Check if user already has a username in the database
-    const checkExistingUsername = async () => {
-      try {
-        const userRef = ref(database, `users/${currentUser.uid}`);
-        const snapshot = await get(userRef);
-        
-        if (snapshot.exists()) {
-          const userData = snapshot.val();
-          if (userData.username) {
-            console.log("User already has a username, redirecting to dashboard");
-            // User already has a username, redirect to dashboard
-            navigate('/dashboard');
-          }
-        }
-      } catch (error) {
-        console.error("Error checking existing username:", error);
-      }
-    };
-    
-    checkExistingUsername();
-  }, [currentUser, navigate]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!currentUser) {
-      navigate('/login');
-      return;
-    }
+    return () => clearTimeout(timer);
+  }, [username]);
+  
+  const checkUsernameAvailability = async (username: string) => {
+    if (!username || username.length < 3) return;
     
     try {
-      setLoading(true);
-      setError('');
+      setChecking(true);
       
-      // Validate username
-      if (!username) {
-        setError("Username is required");
-        return;
-      }
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('username', username)
+        .maybeSingle();
       
-      if (username.length < 3) {
-        setError("Username must be at least 3 characters long");
-        return;
-      }
+      if (error) throw error;
       
-      if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-        setError("Username can only contain letters, numbers, and underscores");
-        return;
-      }
-      
-      // Check if username is already taken
-      const usersRef = ref(database, 'users');
-      const snapshot = await get(usersRef);
-      
-      if (snapshot.exists()) {
-        let usernameTaken = false;
-        snapshot.forEach((childSnapshot) => {
-          const userData = childSnapshot.val();
-          if (userData.username === username && childSnapshot.key !== currentUser.uid) {
-            usernameTaken = true;
-            return true; // Break the forEach loop
-          }
-        });
-        
-        if (usernameTaken) {
-          setError("Username is already taken. Please choose a different username.");
-          return;
+      // If data is null, the username is available
+      setUsernameAvailable(!data);
+    } catch (error) {
+      console.error('Error checking username availability:', error);
+    } finally {
+      setChecking(false);
+    }
+  };
+  
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    
+    if (!username || username.length < 3) {
+      setError('Username must be at least 3 characters');
+      return;
+    }
+    
+    if (!usernameAvailable) {
+      setError('Username is already taken');
+      return;
+    }
+    
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      setError('Username can only contain letters, numbers, and underscores');
+      return;
+    }
+    
+    if (!currentUser) {
+      setError('You must be logged in to set up your profile');
+      return;
+    }
+    
+    setLoading(true);
+    
+    try {
+      // Update user metadata in Supabase Auth
+      await supabase.auth.updateUser({
+        data: {
+          username,
+          full_name: name || username
         }
-      }
-      
-      // Update user profile with the provided username
-      await updateProfile(currentUser, {
-        displayName: name || username
       });
       
-      // Create or update user data in the database
-      const userRef = ref(database, `users/${currentUser.uid}`);
-      const userSnapshot = await get(userRef);
+      // Create or update user data in the profiles table
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select()
+        .eq('id', currentUser.id)
+        .single();
       
-      if (!userSnapshot.exists()) {
-        // Create new user data
-        const userData = {
-          email: currentUser.email,
-          username: username,
-          displayName: name || username,
-          role: 'user',
-          permissions: {
-            canFeed: true,
-            canSchedule: true,
-            canViewStats: true
-          },
-          createdAt: serverTimestamp(),
-          provider: currentUser.providerData[0]?.providerId || 'unknown'
-        };
-        
-        // Save user data to database
-        await set(userRef, userData);
+      if (profileError && profileError.code !== 'PGRST116') {
+        // PGRST116 = "no rows found", which is fine if profile doesn't exist yet
+        throw profileError;
+      }
+      
+      if (!profile) {
+        // Create new profile
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .insert([{
+            id: currentUser.id,
+            username: username,
+            full_name: name || username,
+            email: currentUser.email,
+            created_at: new Date().toISOString()
+          }]);
+          
+        if (insertError) throw insertError;
       } else {
-        // Update existing user data with new username
-        await update(userRef, {
-          username: username,
-          displayName: name || username
-        });
+        // Update existing profile
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({
+            username,
+            full_name: name || username
+          })
+          .eq('id', currentUser.id);
+          
+        if (updateError) throw updateError;
       }
       
       // Show success message
@@ -166,96 +161,101 @@ const UsernameSetup = () => {
       
       // Redirect to dashboard
       navigate('/dashboard');
-      
     } catch (error: any) {
       console.error("Error setting username:", error);
-      setError(error.message || "Failed to set username");
+      setError(error.message || "Failed to update username");
+      
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update username",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
   };
-
+  
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-4">
-      <div className="w-full max-w-md">
-        <Card className="border-gray-200 dark:border-gray-700 shadow-lg">
-          <CardHeader className="space-y-4 pb-6">
-            <div className="flex justify-center">
-              <div className="h-16 w-16 bg-pet-primary rounded-full flex items-center justify-center shadow-md">
-                <User className="text-white h-8 w-8" />
+    <div className="min-h-screen flex flex-col items-center justify-center p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle className="text-2xl">Set Up Your Profile</CardTitle>
+          <CardDescription>Choose a username to complete your account setup</CardDescription>
+        </CardHeader>
+        
+        <CardContent>
+          {error && (
+            <Alert variant="destructive" className="mb-6">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Name</Label>
+              <div className="relative">
+                <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="pl-10"
+                  placeholder="Your name"
+                />
               </div>
             </div>
-            <div className="space-y-2 text-center">
-              <CardTitle className="text-3xl font-bold">Complete Your Profile</CardTitle>
-              <CardDescription className="text-base">
-                Set up your username to continue
-              </CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {error && (
-              <Alert variant="destructive" className="text-sm">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
             
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div className="space-y-3">
-                <div className="space-y-2">
-                  <Label htmlFor="name" className="text-sm font-medium">Full Name (Optional)</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input
-                      id="name"
-                      type="text"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="John Doe"
-                      className="pl-10"
-                    />
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="username" className="text-sm font-medium">Username</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input
-                      id="username"
-                      type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      placeholder="johndoe"
-                      className="pl-10"
-                      required
-                    />
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Username must be at least 3 characters and can only contain letters, numbers, and underscores.
-                  </p>
-                </div>
+            <div className="space-y-2">
+              <Label htmlFor="username" className="flex justify-between">
+                <span>Username</span>
+                {checking ? (
+                  <span className="text-xs text-muted-foreground">Checking...</span>
+                ) : username && username.length >= 3 ? (
+                  usernameAvailable ? (
+                    <span className="text-xs text-green-600">Available</span>
+                  ) : (
+                    <span className="text-xs text-red-600">Already taken</span>
+                  )
+                ) : null}
+              </Label>
+              <div className="relative">
+                <AtSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value.toLowerCase())}
+                  className="pl-10"
+                  placeholder="Choose a username"
+                />
               </div>
-              
-              <Button
-                type="submit"
-                className="w-full bg-pet-primary hover:bg-pet-primary/90"
-                disabled={loading}
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Setting Username...
-                  </>
-                ) : (
-                  "Continue to Dashboard"
-                )}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
+              <p className="text-xs text-muted-foreground">
+                Username must be at least 3 characters and contain only letters, numbers, and underscores.
+              </p>
+            </div>
+            
+            <Button 
+              type="submit" 
+              className="w-full" 
+              disabled={loading || checking || !usernameAvailable || username.length < 3}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Setting Up...
+                </>
+              ) : "Continue"}
+            </Button>
+          </form>
+        </CardContent>
+        
+        <CardFooter className="flex justify-center">
+          <p className="text-sm text-muted-foreground">
+            You can change your username later in your profile settings.
+          </p>
+        </CardFooter>
+      </Card>
     </div>
   );
 };
 
-export default UsernameSetup; 
+export default UsernameSetup;

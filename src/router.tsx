@@ -1,5 +1,5 @@
 import { BrowserRouter, HashRouter, Routes, Route } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
+import { Toaster } from '@/components/ui/toaster';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -25,12 +25,13 @@ import { NotificationProvider } from './contexts/NotificationContext';
 import { DeviceProvider } from './contexts/DeviceContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { useEffect } from 'react';
+import TroubleshootingPage from "./pages/Troubleshooting";
 
 // Determine if we're using a custom domain by checking if we're at the root path
 const isCustomDomain = window.location.pathname.indexOf('/PetFeeder') === -1;
 const Router = isCustomDomain ? BrowserRouter : HashRouter;
 
-export function AppRouter() {
+export default function AppRoutes() {
   // Apply dark mode class based on localStorage preference
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme');
@@ -59,6 +60,7 @@ export function AppRouter() {
                   <Route path="/documentation" element={<Documentation />} />
                   <Route path="/verify-email" element={<VerifyEmail />} />
                   <Route path="/username-setup" element={<UsernameSetup />} />
+                  <Route path="/troubleshooting" element={<TroubleshootingPage />} />
                   
                   {/* Protected routes */}
                   <Route path="/dashboard" element={
@@ -127,7 +129,7 @@ export function AppRouter() {
                   {/* 404 route */}
                   <Route path="*" element={<NotFound />} />
                 </Routes>
-                <Toaster position="top-right" />
+                <Toaster />
               </div>
             </Router>
           </DeviceProvider>
@@ -135,4 +137,4 @@ export function AppRouter() {
       </AuthProvider>
     </ThemeProvider>
   );
-} 
+}

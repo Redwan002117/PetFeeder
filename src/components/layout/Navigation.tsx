@@ -1,178 +1,199 @@
-import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
-import {
-  PawPrint,
-  LayoutDashboard,
+import React from "react";
+import { Link, useLocation } from "react-router-dom";
+import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
+import { useTheme } from "@/contexts/ThemeContext";
+import { useNotifications } from "@/contexts/NotificationContext";
+import { 
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from "@/components/ui";
+import { 
+  Bell, 
+  LogOut, 
+  User, 
+  Settings,
+  Menu,
+  Home,
   Calendar,
-  LineChart,
-  Crown,
-  Users,
-  Bot,
-  FileText,
-  BarChart,
-  HandPlatter,
+  BarChart2, 
   Wifi,
-  HelpCircle
-} from 'lucide-react';
+  Shield,
+  HandPlatter
+} from "lucide-react";
+import ProfileAvatar from "@/components/ProfileAvatar";
+import ThemeToggle from "@/components/ThemeToggle";
 
-interface NavItem {
-  name: string;
-  path: string;
-  icon: React.ReactNode;
-  adminOnly?: boolean;
+interface NavigationProps {
+  toggleSidebar?: () => void;
+  showMenuButton?: boolean;
 }
 
-const navItems: NavItem[] = [
-  { name: 'Dashboard', path: '/dashboard', icon: <LayoutDashboard className="h-5 w-5" /> },
-  { name: 'Pet Profiles', path: '/pet-profiles', icon: <PawPrint className="h-5 w-5" /> },
-  { name: 'Feeding Schedule', path: '/schedule', icon: <Calendar className="h-5 w-5" /> },
-  { name: 'Manual Feed', path: '/manual-feed', icon: <HandPlatter className="h-5 w-5" /> },
-  { name: 'Food Levels', path: '/food-levels', icon: <LineChart className="h-5 w-5" /> },
-  { name: 'Statistics', path: '/statistics', icon: <BarChart className="h-5 w-5" /> },
-  { name: 'Connectivity', path: '/connectivity', icon: <Wifi className="h-5 w-5" /> },
-  { name: 'Help', path: '/documentation', icon: <HelpCircle className="h-5 w-5" /> },
-  { name: 'Admin Dashboard', path: '/admin', icon: <Crown className="h-5 w-5" />, adminOnly: true },
-  { name: 'User Management', path: '/admin/users', icon: <Users className="h-5 w-5" />, adminOnly: true },
-  { name: 'Device Management', path: '/admin/devices', icon: <Bot className="h-5 w-5" />, adminOnly: true },
-  { name: 'System Logs', path: '/admin/logs', icon: <FileText className="h-5 w-5" />, adminOnly: true },
-  { name: 'Analytics', path: '/admin/analytics', icon: <BarChart className="h-5 w-5" />, adminOnly: true },
-];
-
-export const Navigation: React.FC = () => {
-  const [isOpen, setIsOpen] = useState(false);
-  const { currentUser, isAdmin } = useAuth();
-  const location = useLocation();
-
-  // Only show admin items if the user is an admin
-  const filteredNavItems = navItems.filter(item => !item.adminOnly || (item.adminOnly && isAdmin));
-
-  const isActive = (path: string) => {
-    // For exact matches
-    if (location.pathname === path) return true;
-
-    // For nested routes (e.g., /admin/users should highlight /admin)
-    if (path !== '/' && location.pathname.startsWith(path)) return true;
-
-    // Special case for dashboard
-    if (path === '/dashboard' && location.pathname === '/') return true;
-
-    return false;
+const Navigation: React.FC<NavigationProps> = ({ 
+  toggleSidebar,
+  showMenuButton = false
+}) => {
+  const { pathname } = useLocation();
+  const { currentUser, logout, isAdmin } = useAuth();
+  const { notifications, markAllAsRead, unreadCount } = useNotifications();
+  
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error("Failed to log out", error);
+    }
   };
 
   return (
-    <nav className="bg-white shadow-lg dark:bg-gray-800">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
-          <div className="flex">
-            <div className="flex-shrink-0 flex items-center">
-              <Link to="/" className="flex items-center">
-                <PawPrint className="h-6 w-6 text-indigo-600 dark:text-indigo-400 mr-2" />
-                <span className="font-bold text-xl text-indigo-600 dark:text-indigo-400">PetFeeder</span>
+    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background px-4 md:px-6">
+      <div className="flex items-center">
+        {showMenuButton && (
+          <Button variant="ghost" size="icon" onClick={toggleSidebar} className="mr-2">
+            <Menu className="h-5 w-5" />
+            <span className="sr-only">Toggle menu</span>
+          </Button>
+        )}
+        
+        <div className="hidden md:flex items-center">
+          <HandPlatter className="h-6 w-6 text-primary mr-2" />
+          <span className="font-bold text-lg">PetFeeder</span>
+        </div>
+      </div>
+      
+      <div className="flex items-center space-x-1 md:space-x-2">
+        {/* Navigation links for larger screens */}
+        <nav className="hidden md:flex items-center space-x-1">
+          <Button variant="ghost" size="sm" asChild>
+            <Link to="/" className={pathname === "/" ? "text-primary" : ""}>
+              <Home className="h-4 w-4 mr-2" />
+              Home
+            </Link>
+          </Button>
+          <Button variant="ghost" size="sm" asChild>
+            <Link to="/schedule" className={pathname.startsWith("/schedule") ? "text-primary" : ""}>
+              <Calendar className="h-4 w-4 mr-2" />
+              Schedule
+            </Link>
+          </Button>
+          <Button variant="ghost" size="sm" asChild>
+            <Link to="/statistics" className={pathname.startsWith("/statistics") ? "text-primary" : ""}>
+              <BarChart2 className="h-4 w-4 mr-2" />
+              Statistics
+            </Link>
+          </Button>
+          {isAdmin && (
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/admin" className={pathname.startsWith("/admin") ? "text-primary" : ""}>
+                <Shield className="h-4 w-4 mr-2" />
+                Admin
               </Link>
-            </div>
-
-            {/* Desktop Navigation */}
-            <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-              {filteredNavItems.slice(0, 6).map((item) => (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={`${
-                    isActive(item.path)
-                      ? 'border-indigo-500 text-gray-900 dark:text-white'
-                      : 'border-transparent text-gray-500 dark:text-gray-400 hover:border-gray-300 hover:text-gray-700 dark:hover:text-gray-300'
-                  } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
+            </Button>
+          )}
+        </nav>
+        
+        {/* Notifications dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="relative">
+              <Bell className="h-5 w-5" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500"></span>
+              )}
+              <span className="sr-only">Notifications</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-80">
+            <div className="flex items-center justify-between p-2">
+              <span className="text-sm font-medium">Notifications</span>
+              {notifications.length > 0 && (
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={markAllAsRead}
+                  className="h-auto text-xs py-1"
                 >
-                  <span className="mr-2">{item.icon}</span>
-                  {item.name}
-                </Link>
-              ))}
-
-              {/* More dropdown for additional items */}
-              {filteredNavItems.length > 6 && (
-                <div className="relative group">
-                  <button className="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">
-                    <span className="mr-2">•••</span>
-                    More
-                  </button>
-                  <div className="absolute left-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 hidden group-hover:block z-50">
-                    {filteredNavItems.slice(6).map((item) => (
-                      <Link
-                        key={item.path}
-                        to={item.path}
-                        className={`${
-                          isActive(item.path)
-                            ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
-                            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                        } block px-4 py-2 text-sm`}
-                      >
-                        <span className="inline-flex items-center">
-                          <span className="mr-2">{item.icon}</span>
-                          {item.name}
-                        </span>
-                      </Link>
-                    ))}
-                  </div>
+                  Mark all as read
+                </Button>
+              )}
+            </div>
+            <DropdownMenuSeparator />
+            <div className="max-h-80 overflow-y-auto">
+              {notifications.length > 0 ? (
+                notifications.map(notification => (
+                  <DropdownMenuItem key={notification.id} className={cn(
+                    "p-3 cursor-default",
+                    !notification.read && "bg-muted/50"
+                  )}>
+                    <div>
+                      <div className="font-medium mb-1">{notification.title}</div>
+                      <p className="text-xs text-muted-foreground">{notification.message}</p>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {new Date(notification.timestamp).toLocaleString()}
+                      </div>
+                    </div>
+                  </DropdownMenuItem>
+                ))
+              ) : (
+                <div className="text-center p-4 text-muted-foreground">
+                  No notifications
                 </div>
               )}
             </div>
-          </div>
-
-          {/* Mobile menu button */}
-          <div className="flex items-center sm:hidden">
-            <button
-              onClick={() => setIsOpen(!isOpen)}
-              className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
-            >
-              <span className="sr-only">Open main menu</span>
-              <svg
-                className={`${isOpen ? 'hidden' : 'block'} h-6 w-6`}
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                aria-hidden="true"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-              <svg
-                className={`${isOpen ? 'block' : 'hidden'} h-6 w-6`}
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                aria-hidden="true"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        
+        {/* Theme toggle */}
+        <ThemeToggle />
+        
+        {/* User dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="rounded-full">
+              <ProfileAvatar user={currentUser} size="sm" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <div className="flex items-center justify-start p-2">
+              <div className="flex items-center space-x-2">
+                <ProfileAvatar user={currentUser} size="sm" />
+                <div className="flex flex-col">
+                  <p className="text-sm font-medium truncate max-w-[180px]">
+                    {currentUser?.user_metadata?.name || currentUser?.email?.split('@')[0] || 'User'}
+                  </p>
+                  <p className="text-xs text-gray-500 truncate max-w-[180px]">
+                    {currentUser?.email}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link to="/profile" className="cursor-pointer flex items-center">
+                <User className="mr-2 h-4 w-4" />
+                <span>Profile</span>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link to="/settings" className="cursor-pointer flex items-center">
+                <Settings className="mr-2 h-4 w-4" />
+                <span>Settings</span>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600 dark:text-red-400">
+              <LogOut className="mr-2 h-4 w-4" />
+              <span>Logout</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
-
-      {/* Mobile menu */}
-      <div className={`${isOpen ? 'block' : 'hidden'} sm:hidden`}>
-        <div className="pt-2 pb-3 space-y-1">
-          {filteredNavItems.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`${
-                isActive(item.path)
-                  ? 'bg-indigo-50 dark:bg-indigo-900 border-indigo-500 text-indigo-700 dark:text-indigo-300'
-                  : 'border-transparent text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-gray-300 hover:text-gray-800 dark:hover:text-white'
-              } block pl-3 pr-4 py-2 border-l-4 text-base font-medium`}
-              onClick={() => setIsOpen(false)}
-            >
-              <span className="inline-flex items-center">
-                <span className="mr-2">{item.icon}</span>
-                {item.name}
-              </span>
-            </Link>
-          ))}
-        </div>
-      </div>
-    </nav>
+    </header>
   );
-}; 
+};
+
+export default Navigation;

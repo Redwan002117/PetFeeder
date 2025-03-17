@@ -1,0 +1,4 @@
+env GITHUB_PERSONAL_ACCESS_TOKEN="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" npx -y @modelcontextprotocol/server-github
+
+
+env "BRAVE_API_KEY": "BSAusI-jC8vmCKesqlhESduj5IXi--O" npx -y @modelcontextprotocol/server-brave-search

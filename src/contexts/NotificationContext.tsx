@@ -1,127 +1,104 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { useAuth } from "@/contexts/AuthContext";
-import { requestNotificationPermission, saveUserFCMToken, onForegroundMessage, removeUserFCMToken } from "@/lib/firebase";
-import { useToast } from "@/hooks/use-toast";
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { v4 as uuidv4 } from 'uuid';
+import { NotificationContextType, Notification } from '../types/context';
 
-interface NotificationContextProps {
-  notificationsEnabled: boolean;
-  requestPermission: () => Promise<boolean>;
-  disableNotifications: () => Promise<void>;
-}
+const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
-const NotificationContext = createContext<NotificationContextProps | undefined>(undefined);
-
-// Use a named function declaration instead of an arrow function
-export function useNotifications() {
+export const useNotifications = (): NotificationContextType => {
   const context = useContext(NotificationContext);
-  if (!context) {
-    throw new Error("useNotifications must be used within a NotificationProvider");
+  if (context === undefined) {
+    throw new Error('useNotifications must be used within a NotificationProvider');
   }
   return context;
-}
+};
 
-export function NotificationProvider({ children }: { children: React.ReactNode }) {
-  const { currentUser } = useAuth();
-  const { toast } = useToast();
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+const LOCAL_STORAGE_KEY = 'petfeeder_notifications';
 
+export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+
+  // Load notifications from local storage on mount
   useEffect(() => {
-    // Check if notifications are already enabled
-    if (Notification.permission === "granted") {
-      setNotificationsEnabled(true);
+    const storedNotifications = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (storedNotifications) {
+      try {
+        const parsedNotifications = JSON.parse(storedNotifications);
+        setNotifications(parsedNotifications);
+        setUnreadCount(parsedNotifications.filter((n: Notification) => !n.read).length);
+      } catch (error) {
+        console.error('Failed to parse stored notifications:', error);
+        // If parsing fails, clear the storage
+        localStorage.removeItem(LOCAL_STORAGE_KEY);
+      }
     }
   }, []);
 
+  // Save notifications to local storage whenever they change
   useEffect(() => {
-    if (!currentUser || !notificationsEnabled) return;
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(notifications));
+  }, [notifications]);
 
-    // Set up foreground message handler
-    const unsubscribe = onForegroundMessage((payload) => {
-      console.log('Received foreground message:', payload);
-      
-      // Show toast notification for foreground messages
-      toast({
-        title: payload.notification?.title || "New Notification",
-        description: payload.notification?.body || "",
-      });
-    });
+  const addNotification = (notification: Omit<Notification, 'id' | 'timestamp'>) => {
+    const newNotification: Notification = {
+      ...notification,
+      id: uuidv4(),
+      timestamp: Date.now(),
+      read: false,
+    };
 
-    return () => unsubscribe();
-  }, [currentUser, notificationsEnabled, toast]);
+    setNotifications(prev => [newNotification, ...prev]);
+    setUnreadCount(prev => prev + 1);
+  };
 
-  const requestPermission = async () => {
-    if (!currentUser) return false;
-    
-    try {
-      const token = await requestNotificationPermission();
-      
-      if (token) {
-        // Save the token to the user's profile
-        await saveUserFCMToken(currentUser.uid, token);
-        setNotificationsEnabled(true);
-        
-        toast({
-          title: "Notifications Enabled",
-          description: "You will now receive notifications for feeding events.",
-        });
-        
-        return true;
-      } else {
-        toast({
-          title: "Notifications Disabled",
-          description: "You will not receive notifications. You can enable them in your browser settings.",
-          variant: "destructive",
-        });
-        
-        return false;
-      }
-    } catch (error) {
-      console.error("Error requesting notification permission:", error);
-      
-      toast({
-        title: "Error",
-        description: "Failed to enable notifications. Please try again.",
-        variant: "destructive",
-      });
-      
-      return false;
+  const markAsRead = (id: string) => {
+    setNotifications(prev => 
+      prev.map(notification => 
+        notification.id === id 
+          ? { ...notification, read: true } 
+          : notification
+      )
+    );
+    calculateUnreadCount();
+  };
+
+  const markAllAsRead = () => {
+    setNotifications(prev => 
+      prev.map(notification => ({ ...notification, read: true }))
+    );
+    setUnreadCount(0);
+  };
+
+  const removeNotification = (id: string) => {
+    const notification = notifications.find(n => n.id === id);
+    setNotifications(prev => prev.filter(n => n.id !== id));
+    if (notification && !notification.read) {
+      calculateUnreadCount();
     }
   };
 
-  const disableNotifications = async () => {
-    if (!currentUser) return;
-    
-    try {
-      // Remove the FCM token from the user's profile
-      await removeUserFCMToken(currentUser.uid);
-      setNotificationsEnabled(false);
-      
-      toast({
-        title: "Notifications Disabled",
-        description: "You will no longer receive notifications.",
-      });
-    } catch (error) {
-      console.error("Error disabling notifications:", error);
-      
-      toast({
-        title: "Error",
-        description: "Failed to disable notifications. Please try again.",
-        variant: "destructive",
-      });
-    }
+  const clearAll = () => {
+    setNotifications([]);
+    setUnreadCount(0);
+  };
+
+  const calculateUnreadCount = () => {
+    setUnreadCount(notifications.filter(n => !n.read).length);
+  };
+
+  const value: NotificationContextType = {
+    notifications,
+    unreadCount,
+    addNotification,
+    markAsRead,
+    markAllAsRead,
+    removeNotification,
+    clearAll,
   };
 
   return (
-    <NotificationContext.Provider
-      value={{
-        notificationsEnabled,
-        requestPermission,
-        disableNotifications
-      }}
-    >
+    <NotificationContext.Provider value={value}>
       {children}
     </NotificationContext.Provider>
   );
-}
-
-export default NotificationProvider; 
+};

@@ -1,15 +1,13 @@
 import type { Config } from "tailwindcss";
 import animate from "tailwindcss-animate";
+import { fontFamily } from 'tailwindcss/defaultTheme';
 
-export default {
+const config: Config = {
 	darkMode: ["class"],
 	content: [
-		"./pages/**/*.{ts,tsx}",
-		"./components/**/*.{ts,tsx}",
-		"./app/**/*.{ts,tsx}",
-		"./src/**/*.{ts,tsx}",
+		'./src/**/*.{js,jsx,ts,tsx}',
+		'./index.html',
 	],
-	prefix: "",
 	theme: {
 		container: {
 			center: true,
@@ -19,6 +17,9 @@ export default {
 			}
 		},
 		extend: {
+			fontFamily: {
+				sans: ["Inter var", ...fontFamily.sans],
+			},
 			colors: {
 				border: 'hsl(var(--border))',
 				input: 'hsl(var(--input))',
@@ -106,4 +107,6 @@ export default {
 		}
 	},
 	plugins: [animate],
-} satisfies Config;
+};
+
+export default config;

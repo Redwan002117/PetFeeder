@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Wifi, Signal, RefreshCw, WifiOff, Lock, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { getWifiNetworks, setWifiCredentials, getDeviceStatus } from "@/lib/firebase";
+import { getWifiNetworks, setWifiCredentials, getDeviceStatus } from "@/lib/supabase-api";
 import { useToast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
 import PageHeader from "@/components/PageHeader";
@@ -32,6 +32,17 @@ interface WifiNetwork {
   secured: boolean;
 }
 
+interface DeviceStatus {
+  online: boolean;
+  lastSeen?: string;
+  batteryLevel?: number;
+  firmwareVersion?: string;
+  wifiName?: string;
+  ipAddress?: string;
+  signalStrength?: number;
+  [key: string]: any;
+}
+
 interface ConnectivityProps {
   standalone?: boolean;
 }
@@ -40,7 +51,7 @@ const Connectivity = ({ standalone = true }: ConnectivityProps) => {
   const { currentUser } = useAuth();
   const { toast } = useToast();
   const [networks, setNetworks] = useState<WifiNetwork[]>([]);
-  const [deviceStatus, setDeviceStatus] = useState(null);
+  const [deviceStatus, setDeviceStatus] = useState<DeviceStatus | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedNetwork, setSelectedNetwork] = useState<string | null>(null);
@@ -57,7 +68,7 @@ const Connectivity = ({ standalone = true }: ConnectivityProps) => {
 
     try {
       // Use our safe getWifiNetworks function
-      const unsubscribe = getWifiNetworks(currentUser.uid, (data) => {
+      const unsubscribe = getWifiNetworks(currentUser.id, (data) => {
         setLoading(false);
         if (data && data.networks) {
           setNetworks(data.networks);
@@ -90,7 +101,7 @@ const Connectivity = ({ standalone = true }: ConnectivityProps) => {
 
   useEffect(() => {
     if (currentUser) {
-      getDeviceStatus(currentUser.uid, (status) => {
+      getDeviceStatus(currentUser.id, (status) => {
         setDeviceStatus(status);
         setIsConnected(status?.online);
       });
@@ -102,7 +113,7 @@ const Connectivity = ({ standalone = true }: ConnectivityProps) => {
     // Simulate a delay before getting new data
     setTimeout(() => {
       if (currentUser) {
-        getWifiNetworks(currentUser.uid, (data) => {
+        getWifiNetworks(currentUser.id, (data) => {
           if (data) {
             const networksArray = Object.keys(data).map(key => ({
               id: key,
@@ -140,7 +151,7 @@ const Connectivity = ({ standalone = true }: ConnectivityProps) => {
       }
 
       // Use our safe setWifiCredentials function
-      await setWifiCredentials(currentUser.uid, selectedNetwork, password);
+      await setWifiCredentials(currentUser.id, selectedNetwork, password);
       
       toast({
         title: "Success",
@@ -274,7 +285,7 @@ const Connectivity = ({ standalone = true }: ConnectivityProps) => {
                 <div key="signal-strength" className="flex justify-between items-center">
                   <span className="text-sm font-medium">Signal Strength:</span>
                   <span className="text-sm text-gray-600 flex items-center">
-                    {renderNetworkStrength(deviceStatus.signalStrength)}
+                    {renderNetworkStrength(deviceStatus.signalStrength?.toString() || "0")}
                     <span className="ml-1">{deviceStatus.signalStrength}%</span>
                   </span>
                 </div>

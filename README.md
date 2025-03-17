@@ -1,132 +1,113 @@
 # PetFeeder Hub
 
-A modern web application for managing smart pet feeders. Control feeding schedules, monitor food levels, and manage multiple devices from anywhere.
+PetFeeder Hub is a web application for remotely controlling and monitoring your pet feeder device. This application allows you to schedule feeding times, dispense food manually, and view feeding history.
+
+![PetFeeder Hub Logo](src/assets/logo.png)
 
 ## Features
 
-- 🔐 Secure Authentication
-- 📱 Responsive Design
-- 📊 Real-time Monitoring
-- ⏰ Feeding Schedules
-- 📈 Analytics Dashboard
-- 👥 User Management
-- 🤖 Device Management
-- 📝 System Logs
+- 🐾 Remote control of pet feeder device 
+- 📆 Scheduled feedings with custom portions
+- 📊 Feeding history and statistics
+- 👥 Multiple user access with permission management
+- 🔔 Notifications for feeding events
+- 🌙 Dark mode support
 
 ## Tech Stack
 
-- React 18
-- TypeScript
-- Vite
-- Supabase
-- TailwindCSS
-- React Router
-- React Hot Toast
+- React with TypeScript
+- Firebase (Authentication, Realtime Database, Storage)
+- Supabase integration
+- Tailwind CSS with shadcn/ui components
+- Vite for build tooling
+- Deployed on GitHub Pages
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js 18+
-- npm 8+
-- Supabase account
+- Node.js (v16+)
+- npm or yarn
+- Firebase project (for authentication and database)
 
 ### Installation
 
 1. Clone the repository:
-```bash
-git clone https://github.com/yourusername/petfeeder-hub.git
-cd petfeeder-hub
-```
+   ```bash
+   git clone https://github.com/yourusername/petfeeder-hub.git
+   cd petfeeder-hub
+   ```
 
 2. Install dependencies:
-```bash
-npm install
-```
+   ```bash
+   npm install
+   # or
+   yarn
+   ```
 
-3. Create environment files:
-   - Copy `.env.example` to `.env.development` and `.env.production`
-   - Fill in your Supabase credentials
+3. Create a `.env` file in the root directory with your Firebase and Supabase configuration:
+   ```
+   VITE_SUPABASE_URL=your-supabase-url
+   VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
+   ```
 
-4. Start development server:
-```bash
-npm run dev
-```
+4. Start the development server:
+   ```bash
+   npm run dev
+   # or
+   yarn dev
+   ```
 
-### Building for Production
+## Database Management
 
-1. Build the application:
-```bash
-npm run build
-```
+PetFeeder uses a single database schema file located at `src/lib/DatabaseSchema.sql`. This file contains all table definitions, functions, triggers, and security policies needed by the application.
 
-2. Preview the build:
-```bash
-npm run preview
-```
+### Initializing the Database
 
-### Deployment
+To initialize or update the database:
 
-The application can be deployed to GitHub Pages:
-
-1. Install the gh-pages package (if not already installed):
-```bash
-npm install --save-dev gh-pages
-```
-
-2. Make sure your package.json has the correct homepage and deploy script:
-```json
-"homepage": "https://petfeeder.redwancodes.com",
-"scripts": {
-  "deploy": "gh-pages -d dist"
-}
-```
-
-3. Deploy:
 ```bash
 npm run deploy
 ```
 
-## Development
+This command executes the deployment script that applies the schema to your Supabase instance.
 
-### Available Scripts
+### Working with the Database Schema
 
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run preview` - Preview production build
-- `npm run lint` - Run ESLint
-- `npm run format` - Format code with Prettier
-- `npm run test` - Run tests
-- `npm run validate` - Run type checking, linting, and tests
-- `npm run analyze` - Analyze bundle size
+When making changes to the database:
 
-### Project Structure
+1. Always modify `src/lib/DatabaseSchema.sql` directly
+2. Keep the schema file as the single source of truth
+3. Run the deployment script to apply changes
 
+### Manual Deployment
+
+If you need to manually deploy the schema:
+
+1. Use the Supabase SQL Editor
+2. Copy the contents of `DatabaseSchema.sql` 
+3. Execute the SQL statements
+
+## Deployment
+
+The application is automatically deployed to GitHub Pages when changes are pushed to the main branch.
+
+To manually deploy:
+
+```bash
+npm run deploy
+# or
+yarn deploy
 ```
-src/
-├── components/     # Reusable components
-│   ├── admin/     # Admin-specific components
-│   ├── layout/    # Layout components
-│   └── ui/        # UI components
-├── contexts/      # React contexts
-├── hooks/         # Custom hooks
-├── lib/          # Utility functions
-├── pages/        # Page components
-└── types/        # TypeScript types
-```
-
-### Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Support
+## Contributing
 
-For support, email support@petfeeder.com or join our Slack channel.
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Contact
+
+For questions or support, please open an issue or contact the project maintainers.

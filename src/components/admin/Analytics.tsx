@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { database } from '@/lib/firebase';
-import { safeRef, safeGet } from '@/lib/firebase-utils';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, BarChart2, Users, Server, AlertTriangle, PawPrint } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import PageHeader from "@/components/PageHeader";
+import { supabase } from '@/lib/supabase';
 
 interface AnalyticsData {
   totalUsers: number;
@@ -62,54 +61,69 @@ export const Analytics: React.FC = () => {
           startTime.setDate(now.getDate() - 90);
           break;
       }
-      const startTimestamp = startTime.getTime();
+      const startTimestamp = startTime.toISOString();
 
-      // Fetch users
-      const usersSnapshot = await safeGet('users');
-      const usersData = usersSnapshot && usersSnapshot.exists() ? usersSnapshot.val() : {};
-      const users = Object.values(usersData || {});
+      // Fetch users from Supabase
+      const { data: usersData, error: usersError } = await supabase
+        .from('profiles')
+        .select('*');
       
-      // Fetch devices
-      const devicesSnapshot = await safeGet('devices');
-      const devicesData = devicesSnapshot && devicesSnapshot.exists() ? devicesSnapshot.val() : {};
-      const devices = Object.values(devicesData || {});
+      if (usersError) throw usersError;
+      const users = usersData || [];
       
-      // Fetch feedings
-      const feedingsSnapshot = await safeGet('feedings');
-      const feedingsData = feedingsSnapshot && feedingsSnapshot.exists() ? feedingsSnapshot.val() : {};
-      const feedings = Object.values(feedingsData || {})
-        .filter((feeding: any) => feeding.timestamp > startTimestamp);
+      // Fetch devices from Supabase
+      const { data: devicesData, error: devicesError } = await supabase
+        .from('devices')
+        .select('*');
+      
+      if (devicesError) throw devicesError;
+      const devices = devicesData || [];
+      
+      // Fetch feedings from Supabase
+      const { data: feedingsData, error: feedingsError } = await supabase
+        .from('feeding_history')
+        .select('*')
+        .gte('timestamp', startTimestamp);
+      
+      if (feedingsError) throw feedingsError;
+      const feedings = feedingsData || [];
       
       // Calculate analytics
       const totalUsers = users.length;
-      const activeUsers = users.filter((user: any) => user.lastLogin > startTimestamp).length;
+      const activeUsers = users.filter(user => 
+        user.last_sign_in && new Date(user.last_sign_in) >= startTime
+      ).length;
+      
       const totalDevices = devices.length;
-      const activeDevices = devices.filter((device: any) => device.lastSeen > startTimestamp).length;
+      const activeDevices = devices.filter(device => 
+        device.last_seen && new Date(device.last_seen) >= startTime
+      ).length;
+      
       const totalFeedings = feedings.length;
       
       // Calculate average food level
-      const foodLevels = devices.map((device: any) => device.foodLevel || 0);
+      const foodLevels = devices.map(device => device.food_level || 0);
       const averageFoodLevel = foodLevels.length > 0 
-        ? foodLevels.reduce((sum: number, level: number) => sum + level, 0) / foodLevels.length 
+        ? foodLevels.reduce((sum, level) => sum + level, 0) / foodLevels.length 
         : 0;
       
       // Count device issues
-      const deviceIssues = devices.filter((device: any) => 
+      const deviceIssues = devices.filter(device => 
         device.status === 'error' || device.status === 'maintenance'
       ).length;
       
       // Calculate feedings by hour
       const feedingsByHour = Array(24).fill(0);
-      feedings.forEach((feeding: any) => {
+      feedings.forEach(feeding => {
         const hour = new Date(feeding.timestamp).getHours();
         feedingsByHour[hour]++;
       });
       
       // Calculate user growth
       const usersByDate: Record<string, number> = {};
-      users.forEach((user: any) => {
-        if (user.createdAt && user.createdAt > startTimestamp) {
-          const date = new Date(user.createdAt).toISOString().split('T')[0];
+      users.forEach(user => {
+        if (user.created_at && new Date(user.created_at) >= startTime) {
+          const date = new Date(user.created_at).toISOString().split('T')[0];
           usersByDate[date] = (usersByDate[date] || 0) + 1;
         }
       });
@@ -200,7 +214,7 @@ export const Analytics: React.FC = () => {
               <span className="text-2xl font-bold">{data.totalFeedings}</span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Avg. food level: {data.averageFoodLevel}%
+              Avg. food level: {data.averageFoodLevel.toFixed(1)}%
             </p>
           </CardContent>
         </Card>
@@ -227,4 +241,4 @@ export const Analytics: React.FC = () => {
       </div>
     </div>
   );
-}; 
+};

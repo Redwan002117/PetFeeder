@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { database, ref, onValue, off, push, update, remove, serverTimestamp } from '@/lib/firebase';
-import { safeRef, safeOnValue, safeUpdate, safePush, safeRemove } from '@/lib/firebase-utils';
+import { supabase } from '@/lib/supabase';
 
 // UI Components
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,7 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { PlusCircle, Edit, Trash2, Cat, Dog, Rabbit, Bird, Fish, Camera, Loader2, PawPrint, Heart, Weight, Activity, Plus, Calendar, XCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import PageHeader from '@/components/PageHeader';
-import { Spinner } from '@/components/Spinner';
+import Spinner from '@/components/Spinner';
 
 // Add motion imports for animations
 import { motion } from "framer-motion";
@@ -159,45 +158,30 @@ const PetProfiles = () => {
   useEffect(() => {
     if (!currentUser) return;
 
-    const petsRef = safeRef(`users/${currentUser.uid}/pets`);
-    if (!petsRef) {
-      setPets([]);
-      setLoading(false);
-      return;
-    }
+    const fetchPets = async () => {
+      const { data: pets, error } = await supabase
+        .from('pets')
+        .select('*')
+        .eq('owner_id', currentUser.id);
 
-    const unsubscribe = safeOnValue(
-      `users/${currentUser.uid}/pets`,
-      (snapshot) => {
-        if (snapshot.exists()) {
-          const petsData = snapshot.val();
-
-          // Convert to array
-          const petsArray = Object.keys(petsData).map(key => ({
-            id: key,
-            ...petsData[key]
-          }));
-
-          // Sort pets by name
-          petsArray.sort((a, b) => a.name.localeCompare(b.name));
-
-          setPets(petsArray);
-        } else {
-          setPets([]);
-        }
-        setLoading(false);
-      },
-      (error) => {
+      if (error) {
         console.error("Error fetching pets:", error);
         setPets([]);
         setLoading(false);
+        return;
       }
-    );
 
-    // Clean up listener on component unmount
-    return () => {
-      if (unsubscribe) unsubscribe();
+      if (pets) {
+        // Sort pets by name
+        pets.sort((a, b) => a.name.localeCompare(b.name));
+        setPets(pets);
+      } else {
+        setPets([]);
+      }
+      setLoading(false);
     };
+
+    fetchPets();
   }, [currentUser]);
 
   // Form handlers
@@ -259,14 +243,17 @@ const PetProfiles = () => {
       
       console.log("Adding pet with data:", petData);
       
-      // Use safePush to generate a unique ID and path
-      const petId = await safePush(`users/${currentUser.uid}/pets`, petData);
+      // Use Supabase to insert the pet data
+      const { data, error } = await supabase
+        .from('pets')
+        .insert([{ ...petData, owner_id: currentUser.id }])
+        .select();
       
-      if (!petId) {
-        throw new Error("Failed to generate pet ID");
+      if (error) {
+        throw new Error("Failed to add pet");
       }
       
-      console.log("Pet added successfully with ID:", petId);
+      console.log("Pet added successfully:", data);
 
       toast({
         title: "Pet Added",
@@ -318,20 +305,27 @@ const PetProfiles = () => {
     }
 
     try {
-      // Update the pet using safeUpdate
-      await safeUpdate(`users/${currentUser.uid}/pets/${selectedPet.id}`, {
-        name: formData.name,
-        type: formData.type,
-        breed: formData.breed || '',
-        age: formData.age ? parseInt(formData.age) : null,
-        weight: formData.weight ? parseFloat(formData.weight) : null,
-        feedingSchedule: formData.feedingSchedule || '',
-        foodType: formData.foodType || '',
-        foodAmount: formData.foodAmount ? parseFloat(formData.foodAmount) : null,
-        notes: formData.notes || '',
-        photoURL: formData.photoURL || '',
-        updatedAt: Date.now()
-      });
+      // Update the pet using Supabase
+      const { data, error } = await supabase
+        .from('pets')
+        .update({
+          name: formData.name,
+          type: formData.type,
+          breed: formData.breed || '',
+          age: formData.age ? parseInt(formData.age) : null,
+          weight: formData.weight ? parseFloat(formData.weight) : null,
+          feedingSchedule: formData.feedingSchedule || '',
+          foodType: formData.foodType || '',
+          foodAmount: formData.foodAmount ? parseFloat(formData.foodAmount) : null,
+          notes: formData.notes || '',
+          photoURL: formData.photoURL || '',
+          updatedAt: Date.now()
+        })
+        .eq('id', selectedPet.id);
+
+      if (error) {
+        throw new Error("Failed to update pet");
+      }
 
       toast({
         title: "Pet Updated",
@@ -359,8 +353,15 @@ const PetProfiles = () => {
     if (!currentUser || !selectedPet) return;
 
     try {
-      // Delete the pet using safeRemove
-      await safeRemove(`users/${currentUser.uid}/pets/${selectedPet.id}`);
+      // Delete the pet using Supabase
+      const { data, error } = await supabase
+        .from('pets')
+        .delete()
+        .eq('id', selectedPet.id);
+
+      if (error) {
+        throw new Error("Failed to delete pet");
+      }
 
       toast({
         title: "Pet Deleted",
@@ -408,9 +409,10 @@ const PetProfiles = () => {
         
         // If we're editing a pet, update the pet's photo URL in the database
         if (selectedPet && editDialogOpen) {
-          await safeUpdate(`users/${currentUser.uid}/pets/${selectedPet.id}`, {
-            photoURL: data.secure_url
-          });
+          await supabase
+            .from('pets')
+            .update({ photoURL: data.secure_url })
+            .eq('id', selectedPet.id);
           
           toast({
             title: "Photo Updated",
@@ -461,29 +463,18 @@ const PetProfiles = () => {
     
     setLoadingHealthRecords(true);
     try {
-      const healthSnapshot = await safeOnValue(`users/${currentUser.uid}/pets/${petId}/healthRecords`, (snapshot) => {
-        if (snapshot && snapshot.exists()) {
-          const healthData = snapshot.val();
-          // Convert object to array and sort by date (newest first)
-          const records = Object.keys(healthData).map(key => ({
-            id: key,
-            ...healthData[key]
-          })).sort((a, b) => {
-            const dateA = new Date(a.date).getTime();
-            const dateB = new Date(b.date).getTime();
-            return dateB - dateA;
-          });
-          
-          setHealthRecords(records);
-        } else {
-          setHealthRecords([]);
-        }
-        setLoadingHealthRecords(false);
-      });
+      const { data: healthRecords, error } = await supabase
+        .from('health_records')
+        .select('*')
+        .eq('pet_id', petId)
+        .order('date', { ascending: false });
       
-      return () => {
-        if (healthSnapshot) healthSnapshot();
-      };
+      if (error) {
+        throw new Error("Failed to fetch health records");
+      }
+      
+      setHealthRecords(healthRecords || []);
+      setLoadingHealthRecords(false);
     } catch (error) {
       console.error("Error fetching pet health records:", error);
       toast({
@@ -493,7 +484,6 @@ const PetProfiles = () => {
       });
       setHealthRecords([]);
       setLoadingHealthRecords(false);
-      return () => {};
     }
   };
   
@@ -516,14 +506,19 @@ const PetProfiles = () => {
       const record = {
         ...newHealthRecord,
         timestamp: Date.now(),
-        weight: parseFloat(newHealthRecord.weight)
+        weight: parseFloat(newHealthRecord.weight),
+        pet_id: selectedPet.id
       };
       
-      // Generate a unique ID
-      const recordId = `record_${Date.now()}`;
+      // Save to Supabase
+      const { data, error } = await supabase
+        .from('health_records')
+        .insert([record])
+        .select();
       
-      // Save to Firebase
-      await safeSet(`users/${currentUser.uid}/pets/${selectedPet.id}/healthRecords/${recordId}`, record);
+      if (error) {
+        throw new Error("Failed to add health record");
+      }
       
       // Reset form and close dialog
       setNewHealthRecord({
@@ -555,8 +550,15 @@ const PetProfiles = () => {
     if (!currentUser || !selectedPet) return;
     
     try {
-      // Remove from Firebase
-      await safeRemove(`users/${currentUser.uid}/pets/${selectedPet.id}/healthRecords/${recordId}`);
+      // Remove from Supabase
+      const { data, error } = await supabase
+        .from('health_records')
+        .delete()
+        .eq('id', recordId);
+      
+      if (error) {
+        throw new Error("Failed to delete health record");
+      }
       
       toast({
         title: "Record Deleted",
@@ -1045,7 +1047,6 @@ const PetProfiles = () => {
                   <Button 
                     onClick={() => setShowAddHealthRecord(true)}
                     size="sm"
-                    className="bg-green-600 hover:bg-green-700 text-white"
                   >
                     <Plus className="h-4 w-4 mr-1" />
                     Add Record
@@ -1375,4 +1376,4 @@ const PetProfiles = () => {
   );
 };
 
-export default PetProfiles; 
+export default PetProfiles;

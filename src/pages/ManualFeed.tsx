@@ -8,9 +8,16 @@ import { Slider } from "@/components/ui/slider";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { HandPlatter, Clock, PawPrint, Info } from "lucide-react";
-import { triggerManualFeed, getFeedingHistory, getDeviceStatus } from "@/lib/firebase";
+import { triggerManualFeed, getFeedingHistory, getDeviceStatus } from "@/lib/supabase-api";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+
+interface FeedingHistoryItem {
+  id: string;
+  type: 'manual' | 'scheduled';
+  timestamp: number;
+  amount?: number;
+}
 
 const ManualFeed = () => {
   const { currentUser } = useAuth();
@@ -19,18 +26,24 @@ const ManualFeed = () => {
   const [loading, setLoading] = useState(false);
   const [feeding, setFeeding] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [feedingHistory, setFeedingHistory] = useState<any[]>([]);
+  const [feedingHistory, setFeedingHistory] = useState<FeedingHistoryItem[]>([]);
   const [deviceStatus, setDeviceStatus] = useState<any>({});
 
   useEffect(() => {
     if (currentUser) {
-      const unsubscribeHistory = getFeedingHistory(currentUser.uid, (data) => {
+      const unsubscribeHistory = getFeedingHistory(currentUser.id, (data) => {
         if (data) {
-          const historyArray = Object.keys(data).map(key => ({
-            id: key,
-            ...data[key]
-          }));
-          // Sort by timestamp (most recent first) and filter manual feeds only
+          const historyArray = Object.keys(data || {}).map(key => {
+            // Type assertion for the data[key] object
+            const itemData = data[key as keyof typeof data] as Record<string, any>;
+            
+            return {
+              id: key,
+              ...itemData
+            } as FeedingHistoryItem;
+          });
+          
+          // Fix type issues with filter and sort
           const manualFeeds = historyArray
             .filter(item => item.type === 'manual')
             .sort((a, b) => b.timestamp - a.timestamp)
@@ -41,7 +54,7 @@ const ManualFeed = () => {
         }
       });
 
-      const unsubscribeStatus = getDeviceStatus(currentUser.uid, (data) => {
+      const unsubscribeStatus = getDeviceStatus(currentUser.id, (data) => {
         if (data) {
           setDeviceStatus(data);
         } else {
@@ -60,7 +73,7 @@ const ManualFeed = () => {
     if (currentUser && !loading && !feeding) {
       setLoading(true);
       try {
-        await triggerManualFeed(currentUser.uid, feedAmount);
+        await triggerManualFeed(currentUser.id, feedAmount);
         
         // Show feeding animation
         setFeeding(true);

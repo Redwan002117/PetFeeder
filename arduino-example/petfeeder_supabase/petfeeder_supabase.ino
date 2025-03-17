@@ -41,9 +41,6 @@
 #define SUPABASE_API_KEY "your-supabase-anon-key"
 #define SUPABASE_JWT_TOKEN "your-jwt-token" // Generated after user authentication
 
-// User ID - this should be set during device setup
-#define USER_ID "YOUR_USER_ID"
-
 // Debug configuration
 #define DEBUG_MODE true           // Set to false to disable detailed debug output
 #define DEBUG_LED_ENABLED true    // Set to false to disable debug LED patterns
@@ -342,27 +339,27 @@ void updateDeviceStatus() {
   String deviceId = WiFi.macAddress();
   deviceId.replace(":", "");
   
-  debugPrint("Updating device status for ID: " + deviceId);
+  debugPrint("Updating device status for ID: " + deviceId, true);
   
   // Get current time
   time_t now;
   time(&now);
   
-  // Create JSON payload
+  // Create JSON payload - only include fields that exist in the database
   JsonDocument doc;
   doc["status"] = "online";
   doc["last_seen"] = now;
-  doc["ip_address"] = WiFi.localIP().toString();
   doc["wifi_strength"] = WiFi.RSSI();
+  // Note: ip_address field removed as it doesn't exist in the schema
   
   String jsonPayload;
   serializeJson(doc, jsonPayload);
   
-  debugPrint("Status payload: " + jsonPayload);
+  debugPrint("Status payload: " + jsonPayload, true);
   
   // Send to Supabase
   String url = String(SUPABASE_URL) + "/rest/v1/devices?id=eq." + deviceId;
-  debugPrint("Sending PATCH request to: " + url);
+  debugPrint("Sending PATCH request to: " + url, true);
   
   http.begin(client, url);
   http.addHeader("Content-Type", "application/json");
@@ -371,15 +368,15 @@ void updateDeviceStatus() {
   http.addHeader("Prefer", "return=minimal");
   
   unsigned long requestStartTime = millis();
-  int httpResponseCode = http.PATCH(jsonPayload);
+  int patchResponseCode = http.PATCH(jsonPayload);
   unsigned long requestDuration = millis() - requestStartTime;
   
-  if (httpResponseCode == 204) {
-    debugPrint("Device status updated successfully (" + String(requestDuration) + "ms)");
+  if (patchResponseCode == 204) {
+    debugPrint("Device status updated successfully (" + String(requestDuration) + "ms)", true);
     supabaseConnected = true;
   } else {
-    debugPrint("Error updating device status: " + String(httpResponseCode));
-    debugPrint("Response: " + http.getString());
+    debugPrint("Error updating device status: " + String(patchResponseCode), true);
+    debugPrint("Response: " + http.getString(), true);
     supabaseConnected = false;
     debugBlink(3, 200); // Error indicator
   }
@@ -392,10 +389,12 @@ void loadSchedules() {
   String deviceId = WiFi.macAddress();
   deviceId.replace(":", "");
   
-  debugPrint("Loading feeding schedules for device: " + deviceId);
+  debugPrint("Loading feeding schedules for device: " + deviceId, true);
   
-  String url = String(SUPABASE_URL) + "/rest/v1/feeding_schedules?device_id=eq." + deviceId + "&select=*";
-  debugPrint("Sending GET request to: " + url);
+  // Note: The device_id in the database is a UUID, not a MAC address
+  // We need to first query the devices table to get the UUID for this device
+  String url = String(SUPABASE_URL) + "/rest/v1/devices?mac_address=eq." + deviceId + "&select=id";
+  debugPrint("Sending GET request to get device UUID: " + url, true);
   
   http.begin(client, url);
   http.addHeader("Content-Type", "application/json");
@@ -408,25 +407,66 @@ void loadSchedules() {
   
   if (httpResponseCode == 200) {
     String response = http.getString();
-    debugPrint("Received schedule data (" + String(requestDuration) + "ms)");
-    debugPrint("Response size: " + String(response.length()) + " bytes");
+    debugPrint("Received device data (" + String(requestDuration) + "ms)", true);
+    debugPrint("Response size: " + String(response.length()) + " bytes", true);
     
-    // Parse JSON response
-    JsonDocument doc;
-    DeserializationError error = deserializeJson(doc, response);
+    // Parse JSON response to get device UUID
+    JsonDocument deviceDoc;
+    DeserializationError error = deserializeJson(deviceDoc, response);
     
     if (error) {
-      debugPrint("ERROR: deserializeJson() failed: " + String(error.c_str()));
+      debugPrint("ERROR: deserializeJson() failed: " + String(error.c_str()), true);
       debugBlink(4, 200); // Error indicator
       return;
     }
     
-    // Clear existing schedules
-    scheduleCount = 0;
+    // Check if device exists in database
+    JsonArray deviceArray = deviceDoc.as<JsonArray>();
+    if (deviceArray.size() == 0) {
+      debugPrint("ERROR: Device not found in database", true);
+      debugBlink(4, 200); // Error indicator
+      return;
+    }
     
-    // Process schedules
-    JsonArray array = doc.as<JsonArray>();
-    debugPrint("Found " + String(array.size()) + " schedules in database");
+    // Get the UUID for this device
+    String deviceUuid = deviceArray[0]["id"].as<String>();
+    debugPrint("Device UUID: " + deviceUuid, true);
+    
+    // Now get the feeding schedules using the UUID
+    http.end();
+    String schedulesUrl = String(SUPABASE_URL) + "/rest/v1/feeding_schedules?device_id=eq." + deviceUuid + "&select=*";
+    debugPrint("Sending GET request for schedules: " + schedulesUrl, true);
+    
+    http.begin(client, schedulesUrl);
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("apikey", SUPABASE_API_KEY);
+    http.addHeader("Authorization", "Bearer " + String(SUPABASE_JWT_TOKEN));
+    
+    requestStartTime = millis();
+    httpResponseCode = http.GET();
+    requestDuration = millis() - requestStartTime;
+    
+    if (httpResponseCode == 200) {
+      String schedulesResponse = http.getString();
+      debugPrint("Received schedule data (" + String(requestDuration) + "ms)", true);
+      debugPrint("Response size: " + String(schedulesResponse.length()) + " bytes", true);
+      
+      // Parse JSON response
+      JsonDocument doc;
+      DeserializationError error = deserializeJson(doc, schedulesResponse);
+      
+      if (error) {
+        debugPrint("ERROR: deserializeJson() failed: " + String(error.c_str()), true);
+        debugBlink(4, 200); // Error indicator
+        return;
+      }
+      
+      // Clear existing schedules
+      scheduleCount = 0;
+      
+      // Process schedules
+      JsonArray array = doc.as<JsonArray>();
+      debugPrint("Found " + String(array.size()) + " schedules in database", true);
     
     for (JsonObject obj : array) {
       if (scheduleCount < 10) { // Maximum 10 schedules
@@ -465,6 +505,8 @@ void loadSchedules() {
 }
 
 // Check if any scheduled feeding is due
+}
+
 void checkSchedules() {
   debugPrint("Checking feeding schedules...");
   
@@ -518,18 +560,19 @@ void checkSchedules() {
   
   debugPrint("Schedule check complete");
 }
-
+ 
 // Check for manual feed commands from Supabase
 void checkForManualFeedCommand() {
-  debugPrint("Checking for manual feed commands...");
+  debugPrint("Checking for manual feed commands...", true);
   
   String deviceId = WiFi.macAddress();
   deviceId.replace(":", "");
   
-  String url = String(SUPABASE_URL) + "/rest/v1/feed_commands?device_id=eq." + deviceId + "&status=eq.pending&select=*";
-  debugPrint("Sending GET request to: " + url);
+  // First get the device UUID
+  String deviceUrl = String(SUPABASE_URL) + "/rest/v1/devices?mac_address=eq." + deviceId + "&select=id";
+  debugPrint("Sending GET request to get device UUID: " + deviceUrl, true);
   
-  http.begin(client, url);
+  http.begin(client, deviceUrl);
   http.addHeader("Content-Type", "application/json");
   http.addHeader("apikey", SUPABASE_API_KEY);
   http.addHeader("Authorization", "Bearer " + String(SUPABASE_JWT_TOKEN));
@@ -537,6 +580,54 @@ void checkForManualFeedCommand() {
   unsigned long requestStartTime = millis();
   int httpResponseCode = http.GET();
   unsigned long requestDuration = millis() - requestStartTime;
+  
+  if (httpResponseCode != 200) {
+    debugPrint("ERROR: Failed to get device UUID: " + String(httpResponseCode), true);
+    debugPrint("Response: " + http.getString(), true);
+    debugBlink(4, 200); // Error indicator
+    http.end();
+    return;
+  }
+  
+  String response = http.getString();
+  
+  // Parse JSON response to get device UUID
+  JsonDocument deviceDoc;
+  DeserializationError error = deserializeJson(deviceDoc, response);
+  
+  if (error) {
+    debugPrint("ERROR: deserializeJson() failed: " + String(error.c_str()), true);
+    debugBlink(4, 200); // Error indicator
+    http.end();
+    return;
+  }
+  
+  // Check if device exists in database
+  JsonArray deviceArray = deviceDoc.as<JsonArray>();
+  if (deviceArray.size() == 0) {
+    debugPrint("ERROR: Device not found in database", true);
+    debugBlink(4, 200); // Error indicator
+    http.end();
+    return;
+  }
+  
+  // Get the UUID for this device
+  String deviceUuid = deviceArray[0]["id"].as<String>();
+  debugPrint("Device UUID: " + deviceUuid, true);
+  http.end();
+  
+  // Now check for feed commands using the UUID
+  String commandsUrl = String(SUPABASE_URL) + "/rest/v1/feed_commands?device_id=eq." + deviceUuid + "&status=eq.pending&select=*";
+  debugPrint("Sending GET request for feed commands: " + commandsUrl, true);
+  
+  http.begin(client, commandsUrl);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("apikey", SUPABASE_API_KEY);
+  http.addHeader("Authorization", "Bearer " + String(SUPABASE_JWT_TOKEN));
+  
+  requestStartTime = millis();
+  httpResponseCode = http.GET();
+  requestDuration = millis() - requestStartTime;
   
   if (httpResponseCode == 200) {
     String response = http.getString();
@@ -568,28 +659,25 @@ void checkForManualFeedCommand() {
     for (JsonObject obj : array) {
       String commandId = obj["id"].as<String>();
       int amount = obj["amount"].as<int>();
-      String userId = obj["user_id"].as<String>();
       
       // Execute feed command
       debugPrint("========== MANUAL FEEDING COMMAND ==========");
-      debugPrint("Command ID: " + commandId);
-      debugPrint("User ID: " + userId);
-      debugPrint("Amount: " + String(amount) + " grams");
       
+      // Update command status to 'processing'
+      updateCommandStatus(commandId, "processing");
+      
+      // Execute the feed command
+      debugPrint("Executing feed command: " + String(amount) + " grams");
       feed(amount);
       
-      // Log feeding event
-      debugPrint("Logging manual feeding event...");
-      logFeedingEvent(amount, "manual");
-      
-      // Update command status to completed
-      debugPrint("Updating command status to 'completed'...");
+      // Update command status to 'completed'
       updateCommandStatus(commandId, "completed");
       
-      debugPrint("======= MANUAL FEEDING COMMAND COMPLETE =======");
+      // Log feeding event
+      logFeedingEvent(amount, "manual");
     }
   } else {
-    debugPrint("ERROR: Failed to check feed commands: " + String(httpResponseCode));
+    debugPrint("ERROR: Failed to get feed commands: " + String(httpResponseCode));
     debugPrint("Response: " + http.getString());
     debugBlink(4, 200); // Error indicator
   }
@@ -599,7 +687,7 @@ void checkForManualFeedCommand() {
 
 // Update command status in Supabase
 void updateCommandStatus(String commandId, String status) {
-  debugPrint("Updating command status for ID: " + commandId + " to '" + status + "'");
+  debugPrint("Updating command status for ID: " + commandId + " to '" + status + "'", true);
   
   JsonDocument doc;
   doc["status"] = status;
@@ -607,10 +695,10 @@ void updateCommandStatus(String commandId, String status) {
   String jsonPayload;
   serializeJson(doc, jsonPayload);
   
-  debugPrint("Status update payload: " + jsonPayload);
+  debugPrint("Status update payload: " + jsonPayload, true);
   
   String url = String(SUPABASE_URL) + "/rest/v1/feed_commands?id=eq." + commandId;
-  debugPrint("Sending PATCH request to: " + url);
+  debugPrint("Sending PATCH request to: " + url, true);
   
   http.begin(client, url);
   http.addHeader("Content-Type", "application/json");
@@ -619,13 +707,13 @@ void updateCommandStatus(String commandId, String status) {
   http.addHeader("Prefer", "return=minimal");
   
   unsigned long requestStartTime = millis();
-  int httpResponseCode = http.PATCH(jsonPayload);
+  int patchResponseCode = http.PATCH(jsonPayload);
   unsigned long requestDuration = millis() - requestStartTime;
   
-  if (httpResponseCode == 204) {
+  if (patchResponseCode == 204) {
     debugPrint("Command status updated successfully (" + String(requestDuration) + "ms)");
   } else {
-    debugPrint("ERROR: Failed to update command status: " + String(httpResponseCode));
+    debugPrint("ERROR: Failed to update command status: " + String(patchResponseCode));
     debugPrint("Response: " + http.getString());
     debugBlink(3, 200); // Error indicator
   }
@@ -635,18 +723,62 @@ void updateCommandStatus(String commandId, String status) {
 
 // Log feeding event to Supabase
 void logFeedingEvent(int amount, String type) {
-  debugPrint("Logging feeding event: " + String(amount) + "g, type: " + type);
+  debugPrint("Logging feeding event: " + String(amount) + "g, type: " + type, true);
   
   String deviceId = WiFi.macAddress();
   deviceId.replace(":", "");
+  
+  // First get the device UUID
+  String deviceUrl = String(SUPABASE_URL) + "/rest/v1/devices?mac_address=eq." + deviceId + "&select=id";
+  debugPrint("Sending GET request to get device UUID: " + deviceUrl, true);
+  
+  http.begin(client, deviceUrl);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("apikey", SUPABASE_API_KEY);
+  http.addHeader("Authorization", "Bearer " + String(SUPABASE_JWT_TOKEN));
+  
+  int httpResponseCode = http.GET();
+  
+  if (httpResponseCode != 200) {
+    debugPrint("ERROR: Failed to get device UUID: " + String(httpResponseCode), true);
+    debugPrint("Response: " + http.getString(), true);
+    debugBlink(4, 200); // Error indicator
+    http.end();
+    return;
+  }
+  
+  String response = http.getString();
+  http.end();
+  
+  // Parse JSON response to get device UUID
+  JsonDocument deviceDoc;
+  DeserializationError error = deserializeJson(deviceDoc, response);
+  
+  if (error) {
+    debugPrint("ERROR: deserializeJson() failed: " + String(error.c_str()), true);
+    debugBlink(4, 200); // Error indicator
+    return;
+  }
+  
+  // Check if device exists in database
+  JsonArray deviceArray = deviceDoc.as<JsonArray>();
+  if (deviceArray.size() == 0) {
+    debugPrint("ERROR: Device not found in database", true);
+    debugBlink(4, 200); // Error indicator
+    return;
+  }
+  
+  // Get the UUID for this device
+  String deviceUuid = deviceArray[0]["id"].as<String>();
+  debugPrint("Device UUID: " + deviceUuid, true);
   
   // Get current time
   time_t now;
   time(&now);
   
-  // Create JSON payload
+  // Create JSON payload without user references
   JsonDocument doc;
-  doc["device_id"] = deviceId;
+  doc["device_id"] = deviceUuid; // Use UUID instead of MAC address
   doc["amount"] = amount;
   doc["type"] = type;
   doc["timestamp"] = now;
@@ -667,14 +799,14 @@ void logFeedingEvent(int amount, String type) {
   http.addHeader("Prefer", "return=minimal");
   
   unsigned long requestStartTime = millis();
-  int httpResponseCode = http.POST(jsonPayload);
+  int postResponseCode = http.POST(jsonPayload);
   unsigned long requestDuration = millis() - requestStartTime;
   
-  if (httpResponseCode == 201) {
+  if (postResponseCode == 201) {
     debugPrint("Feeding event logged successfully (" + String(requestDuration) + "ms)");
     debugBlink(2); // Success indicator
   } else {
-    debugPrint("ERROR: Failed to log feeding event: " + String(httpResponseCode));
+    debugPrint("ERROR: Failed to log feeding event: " + String(postResponseCode));
     debugPrint("Response: " + http.getString());
     debugBlink(3, 200); // Error indicator
   }
@@ -684,7 +816,7 @@ void logFeedingEvent(int amount, String type) {
 
 // Update food level in Supabase
 void updateFoodLevel() {
-  debugPrint("Updating food level in Supabase...");
+  debugPrint("Updating food level in Supabase...", true);
   
   String deviceId = WiFi.macAddress();
   deviceId.replace(":", "");
@@ -694,9 +826,52 @@ void updateFoodLevel() {
   
   // Check if reading was successful
   if (foodLevel < 0) {
-    debugPrint("ERROR: Failed to read food level, skipping update");
+    debugPrint("ERROR: Failed to read food level, skipping update", true);
     return;
   }
+  
+  // First get the device UUID
+  String deviceUrl = String(SUPABASE_URL) + "/rest/v1/devices?mac_address=eq." + deviceId + "&select=id";
+  debugPrint("Sending GET request to get device UUID: " + deviceUrl, true);
+  
+  http.begin(client, deviceUrl);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("apikey", SUPABASE_API_KEY);
+  http.addHeader("Authorization", "Bearer " + String(SUPABASE_JWT_TOKEN));
+  
+  int httpResponseCode = http.GET();
+  
+  if (httpResponseCode != 200) {
+    debugPrint("ERROR: Failed to get device UUID: " + String(httpResponseCode), true);
+    debugPrint("Response: " + http.getString(), true);
+    debugBlink(4, 200); // Error indicator
+    http.end();
+    return;
+  }
+  
+  String response = http.getString();
+  http.end();
+  
+  // Parse JSON response to get device UUID
+  JsonDocument deviceDoc;
+  DeserializationError error = deserializeJson(deviceDoc, response);
+  
+  if (error) {
+    debugPrint("ERROR: deserializeJson() failed: " + String(error.c_str()), true);
+    debugBlink(4, 200); // Error indicator
+    return;
+  }
+  
+  // Check if device exists in database
+  JsonArray deviceArray = deviceDoc.as<JsonArray>();
+  if (deviceArray.size() == 0) {
+    debugPrint("ERROR: Device not found in database", true);
+    debugBlink(4, 200); // Error indicator
+    return;
+  }
+  
+  // Get the UUID for this device
+  String deviceUuid = deviceArray[0]["id"].as<String>();
   
   // Create JSON payload
   JsonDocument doc;
@@ -705,11 +880,11 @@ void updateFoodLevel() {
   String jsonPayload;
   serializeJson(doc, jsonPayload);
   
-  debugPrint("Food level payload: " + jsonPayload);
+  debugPrint("Food level payload: " + jsonPayload, true);
   
   // Send to Supabase
-  String url = String(SUPABASE_URL) + "/rest/v1/devices?id=eq." + deviceId;
-  debugPrint("Sending PATCH request to: " + url);
+  String url = String(SUPABASE_URL) + "/rest/v1/devices?id=eq." + deviceUuid;
+  debugPrint("Sending PATCH request to: " + url, true);
   
   http.begin(client, url);
   http.addHeader("Content-Type", "application/json");
@@ -718,13 +893,13 @@ void updateFoodLevel() {
   http.addHeader("Prefer", "return=minimal");
   
   unsigned long requestStartTime = millis();
-  int httpResponseCode = http.PATCH(jsonPayload);
+  int patchResponseCode = http.PATCH(jsonPayload);
   unsigned long requestDuration = millis() - requestStartTime;
   
-  if (httpResponseCode == 204) {
+  if (patchResponseCode == 204) {
     debugPrint("Food level updated successfully (" + String(requestDuration) + "ms)");
   } else {
-    debugPrint("ERROR: Failed to update food level: " + String(httpResponseCode));
+    debugPrint("ERROR: Failed to update food level: " + String(patchResponseCode));
     debugPrint("Response: " + http.getString());
     debugBlink(3, 200); // Error indicator
   }
@@ -765,13 +940,13 @@ void updateBatteryLevel() {
   http.addHeader("Prefer", "return=minimal");
   
   unsigned long requestStartTime = millis();
-  int httpResponseCode = http.PATCH(jsonPayload);
+  int patchResponseCode = http.PATCH(jsonPayload);
   unsigned long requestDuration = millis() - requestStartTime;
   
-  if (httpResponseCode == 204) {
+  if (patchResponseCode == 204) {
     debugPrint("Battery level updated successfully (" + String(requestDuration) + "ms)");
   } else {
-    debugPrint("ERROR: Failed to update battery level: " + String(httpResponseCode));
+    debugPrint("ERROR: Failed to update battery level: " + String(patchResponseCode));
     debugPrint("Response: " + http.getString());
     debugBlink(3, 200); // Error indicator
   }
@@ -781,22 +956,41 @@ void updateBatteryLevel() {
 
 // Read food level from sensor
 int readFoodLevel() {
-  debugPrint("Reading food level from ultrasonic sensor...");
+  debugPrint("Reading food level from ultrasonic sensor...", true);
   
-  // Using ultrasonic sensor to measure food level
-  // Send a pulse
-  digitalWrite(TRIG_PIN, LOW);
-  delayMicroseconds(2);
-  digitalWrite(TRIG_PIN, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(TRIG_PIN, LOW);
+  // Try up to 3 times to get a valid reading
+  long duration = 0;
+  int attempts = 0;
+  const int maxAttempts = 3;
   
-  // Measure the response
-  long duration = pulseIn(ECHO_PIN, HIGH, 30000); // 30ms timeout
+  while (attempts < maxAttempts) {
+    attempts++;
+    
+    // Reset the sensor by setting TRIG low
+    digitalWrite(TRIG_PIN, LOW);
+    delayMicroseconds(5);
+    
+    // Send a pulse
+    digitalWrite(TRIG_PIN, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(TRIG_PIN, LOW);
+    
+    // Measure the response with a longer timeout (50ms)
+    duration = pulseIn(ECHO_PIN, HIGH, 50000); 
+    
+    // Check if reading was successful
+    if (duration > 0) {
+      debugPrint("Ultrasonic reading successful on attempt " + String(attempts), true);
+      break;
+    }
+    
+    debugPrint("Ultrasonic reading attempt " + String(attempts) + " failed, retrying...", true);
+    delay(100); // Wait before retrying
+  }
   
-  // Check if reading timed out
+  // Check if all readings timed out
   if (duration == 0) {
-    debugPrint("ERROR: Ultrasonic sensor reading timed out");
+    debugPrint("ERROR: Ultrasonic sensor reading timed out after " + String(maxAttempts) + " attempts", true);
     debugBlink(3, 200); // Error indicator
     return -1; // Error value
   }

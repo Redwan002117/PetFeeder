@@ -6,8 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, Server, Send, Users, Database, Shield, Key } from "lucide-react";
-import { ref, update, get } from "firebase/database";
-import { database } from "@/lib/firebase";
+import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -54,35 +53,40 @@ const AdminOnlySettings = () => {
     },
   });
 
-  // Load SMTP settings from Firebase when component mounts
+  // Load SMTP settings from Supabase when component mounts
   React.useEffect(() => {
     if (currentUser) {
       setIsLoading(true);
-      const smtpSettingsRef = ref(database, `system/smtpSettings`);
-      get(smtpSettingsRef).then((snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.val();
-          form.reset({
-            service: data.service || "",
-            host: data.host || "",
-            port: data.port || "",
-            secure: data.secure !== undefined ? data.secure : true,
-            username: data.username || "",
-            password: data.password || "",
-            fromEmail: data.fromEmail || "",
-            apiKey: data.apiKey || "",
-          });
-          setSmtpProvider(data.service === "emailjs" ? "api" : "smtp");
-        }
-        setIsLoading(false);
-      }).catch(error => {
-        console.error("Error loading SMTP settings:", error);
-        setIsLoading(false);
-      });
+      
+      // Fetch SMTP settings from Supabase
+      supabase
+        .from('system_settings')
+        .select('*')
+        .eq('key', 'smtp_settings')
+        .single()
+        .then(({ data, error }) => {
+          if (error) {
+            console.error("Error loading SMTP settings:", error);
+          } else if (data) {
+            const smtpData = data.value;
+            form.reset({
+              service: smtpData.service || "",
+              host: smtpData.host || "",
+              port: smtpData.port || "",
+              secure: smtpData.secure !== undefined ? smtpData.secure : true,
+              username: smtpData.username || "",
+              password: smtpData.password || "",
+              fromEmail: smtpData.fromEmail || "",
+              apiKey: smtpData.apiKey || "",
+            });
+            setSmtpProvider(smtpData.service === "emailjs" ? "api" : "smtp");
+          }
+          setIsLoading(false);
+        });
     }
   }, [currentUser, form]);
 
-  const onSubmitSMTPSettings = (data: SMTPFormValues) => {
+  const onSubmitSMTPSettings = async (data: SMTPFormValues) => {
     if (!currentUser) {
       toast({
         title: "Error",
@@ -93,29 +97,59 @@ const AdminOnlySettings = () => {
     }
 
     setIsLoading(true);
-    const smtpSettingsRef = ref(database, `system/smtpSettings`);
     
-    update(smtpSettingsRef, {
-      ...data,
-      updatedAt: new Date().toISOString(),
-      updatedBy: currentUser.uid,
-    })
-      .then(() => {
-        toast({
-          title: "Settings Saved",
-          description: "Email settings have been updated successfully.",
-        });
-        setIsLoading(false);
-      })
-      .catch((error) => {
-        console.error("Error saving SMTP settings:", error);
-        toast({
-          title: "Error",
-          description: "Failed to save email settings. Please try again.",
-          variant: "destructive",
-        });
-        setIsLoading(false);
+    // Check if SMTP settings record exists
+    const { data: existingData, error: fetchError } = await supabase
+      .from('system_settings')
+      .select('*')
+      .eq('key', 'smtp_settings')
+      .single();
+    
+    try {
+      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 is "not found" error
+        throw fetchError;
+      }
+      
+      const smtpData = {
+        key: 'smtp_settings',
+        value: {
+          ...data,
+          updatedAt: new Date().toISOString(),
+          updatedBy: currentUser.id,
+        }
+      };
+      
+      let response;
+      
+      if (existingData) {
+        // Update existing record
+        response = await supabase
+          .from('system_settings')
+          .update(smtpData)
+          .eq('key', 'smtp_settings');
+      } else {
+        // Insert new record
+        response = await supabase
+          .from('system_settings')
+          .insert([smtpData]);
+      }
+      
+      if (response.error) throw response.error;
+      
+      toast({
+        title: "Settings Saved",
+        description: "Email settings have been updated successfully.",
       });
+    } catch (error: any) {
+      console.error("Error:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save email settings. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleTestEmail = async () => {
@@ -158,41 +192,22 @@ const AdminOnlySettings = () => {
     const [testEmail, setTestEmail] = useState("");
     const [isSending, setIsSending] = useState(false);
     
-    const handleTestEmail = async (e: React.FormEvent) => {
-      e.preventDefault();
-      
-      if (!testEmail) {
-        toast({
-          title: "Error",
-          description: "Please enter an email address to send the test to.",
-          variant: "destructive",
-        });
-        return;
-      }
-      
+    const handleTestEmail = async (event: React.FormEvent) => {
+      event.preventDefault();
       setIsSending(true);
       
       try {
-        const result = await sendTestEmail(testEmail);
-        
-        if (result.success) {
-          toast({
-            title: "Success",
-            description: "Test email sent successfully! Please check your inbox.",
-            variant: "default",
-          });
-        } else {
-          toast({
-            title: "Error",
-            description: `Failed to send test email: ${result.message}`,
-            variant: "destructive",
-          });
-        }
-      } catch (error) {
-        console.error("Error sending test email:", error);
+        await sendTestEmail(testEmail);
+        toast({
+          title: "Success",
+          description: "Test email sent successfully! Please check your inbox.",
+          variant: "default",
+        });
+      } catch (error: any) {
+        console.error("Error:", error);
         toast({
           title: "Error",
-          description: "An unexpected error occurred while sending the test email.",
+          description: `Failed to send test email: ${error.message}`,
           variant: "destructive",
         });
       } finally {
@@ -544,4 +559,4 @@ const AdminOnlySettings = () => {
   );
 };
 
-export default AdminOnlySettings; 
+export default AdminOnlySettings;

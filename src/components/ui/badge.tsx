@@ -25,12 +25,23 @@ const badgeVariants = cva(
 
 export interface BadgeProps
   extends React.HTMLAttributes<HTMLDivElement>,
-    VariantProps<typeof badgeVariants> {}
-
-function Badge({ className, variant, ...props }: BadgeProps) {
-  return (
-    <div className={cn(badgeVariants({ variant }), className)} {...props} />
-  )
+    VariantProps<typeof badgeVariants> {
+  onClick?: React.MouseEventHandler<HTMLDivElement>;
 }
+
+// Fix the ref forwarding issue
+const Badge = React.forwardRef<HTMLDivElement, BadgeProps>(
+  ({ className, variant = "default", ...props }, ref) => {
+    return (
+      <div
+        className={cn(badgeVariants({ variant }), className)}
+        {...props}
+        ref={ref as any} // Cast ref to any to avoid type issues
+      />
+    )
+  }
+)
+
+Badge.displayName = "Badge"
 
 export { Badge, badgeVariants }

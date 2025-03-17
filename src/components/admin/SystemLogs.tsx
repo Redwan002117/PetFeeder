@@ -1,21 +1,21 @@
 import React, { useEffect, useState } from 'react';
-import { database } from '@/lib/firebase';
-import { safeRef, safeGet, safeOnValue } from '@/lib/firebase-utils';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, FileText, AlertCircle, Info, PawPrint } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import PageHeader from "@/components/PageHeader";
+import { supabase } from '@/lib/supabase';
 
 interface LogEntry {
   id: string;
-  timestamp: number;
+  timestamp: string;
   level: 'info' | 'warning' | 'error';
   message: string;
   source: string;
   details?: string;
+  created_at: string;
 }
 
 export const SystemLogs: React.FC = () => {
@@ -26,80 +26,55 @@ export const SystemLogs: React.FC = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    const unsubscribe = fetchLogs();
+    fetchLogs();
+    
+    // Set up real-time subscription for logs
+    const channel = supabase
+      .channel('public:system_logs')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'system_logs'
+      }, () => {
+        fetchLogs();
+      })
+      .subscribe();
+      
     return () => {
-      if (unsubscribe) {
-        unsubscribe();
-      }
+      channel.unsubscribe();
     };
   }, [filter, limit]);
 
-  const fetchLogs = () => {
+  const fetchLogs = async () => {
     try {
       setLoading(true);
       
-      // Use safeRef instead of ref
-      const logsRef = safeRef('logs');
+      let query = supabase
+        .from('system_logs')
+        .select('*')
+        .order('timestamp', { ascending: false })
+        .limit(limit);
       
-      if (!logsRef) {
-        setLogs([]);
-        setLoading(false);
-        return;
+      // Apply filter if needed
+      if (filter !== 'all') {
+        query = query.eq('level', filter);
       }
-
-      // Use safeOnValue instead of onValue
-      const unsubscribe = safeOnValue(
-        'logs',
-        (snapshot) => {
-          if (snapshot.exists()) {
-            const logsData = snapshot.val();
-
-            // Convert to array and sort
-            let logsArray = Object.keys(logsData).map(key => ({
-              id: key,
-              ...logsData[key]
-            })) as LogEntry[];
-
-            // Sort by timestamp (newest first)
-            logsArray.sort((a, b) => b.timestamp - a.timestamp);
-
-            // Apply filter if needed
-            if (filter !== 'all') {
-              logsArray = logsArray.filter(log => log.level === filter);
-            }
-
-            // Apply limit
-            logsArray = logsArray.slice(0, limit);
-
-            setLogs(logsArray);
-          } else {
-            setLogs([]);
-          }
-          setLoading(false);
-        },
-        (error) => {
-          console.error("Error fetching logs:", error);
-          toast({
-            title: "Error",
-            description: "Failed to load system logs. Please try again later.",
-            variant: "destructive"
-          });
-          setLoading(false);
-          setLogs([]);
-        }
-      );
-
-      return unsubscribe;
+      
+      const { data, error } = await query;
+      
+      if (error) throw error;
+      
+      setLogs(data || []);
     } catch (error) {
-      console.error("Error setting up logs listener:", error);
+      console.error("Error fetching logs:", error);
       toast({
         title: "Error",
         description: "Failed to load system logs. Please try again later.",
         variant: "destructive"
       });
-      setLoading(false);
       setLogs([]);
-      return undefined;
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -169,9 +144,13 @@ export const SystemLogs: React.FC = () => {
     }
   };
 
-  const formatTimestamp = (timestamp: number) => {
-    const date = new Date(timestamp);
-    return date.toLocaleString();
+  const formatTimestamp = (timestamp: string) => {
+    try {
+      const date = new Date(timestamp);
+      return date.toLocaleString();
+    } catch (e) {
+      return 'Invalid date';
+    }
   };
 
   return (
@@ -215,10 +194,16 @@ export const SystemLogs: React.FC = () => {
           </div>
         </div>
         
-        <Button onClick={fetchLogs} className="mt-4 sm:mt-0">
-          <PawPrint className="mr-2 h-4 w-4" />
-          Refresh Logs
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={fetchLogs} className="mt-4 sm:mt-0">
+            <PawPrint className="mr-2 h-4 w-4" />
+            Refresh Logs
+          </Button>
+          
+          <Button variant="outline" onClick={handleExportLogs} className="mt-4 sm:mt-0">
+            Export CSV
+          </Button>
+        </div>
       </div>
       
       {loading ? (
@@ -272,4 +257,4 @@ export const SystemLogs: React.FC = () => {
       )}
     </div>
   );
-}; 
+};

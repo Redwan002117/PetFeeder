@@ -7,7 +7,8 @@ import ThemeToggle from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import ProfileAvatar from '@/components/ProfileAvatar';
 import { motion } from 'framer-motion';
-import { getDeviceStatus, getDevices, getLastFeeding } from '@/lib/firebase';
+import { getDeviceStatus, getDevices } from '@/lib/supabase-api';
+import { supabase } from '@/lib/supabase';
 
 function Home() {
   const { currentUser } = useAuth();
@@ -60,7 +61,7 @@ function Home() {
         setDeviceLoading(true);
         
         // Try to get the user's devices
-        const devices = await getDevices(currentUser.uid).catch(() => null);
+        const devices = await getDevices(currentUser.id).catch(() => null);
         
         if (devices && Object.keys(devices).length > 0) {
           const deviceId = Object.keys(devices)[0];
@@ -114,6 +115,25 @@ function Home() {
     
     fetchDeviceData();
   }, [currentUser]);
+
+  // Add a simple implementation for getLastFeeding if it doesn't exist
+  const getLastFeeding = async (deviceId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('feeding_history')
+        .select('*')
+        .eq('device_id', deviceId)
+        .order('timestamp', { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') throw error;
+      return data;
+    } catch (error) {
+      console.error("Error getting last feeding:", error);
+      return null;
+    }
+  };
 
   // Format the last active time
   const formatLastActive = (timestamp: string) => {
@@ -760,4 +780,4 @@ function Home() {
   );
 }
 
-export default Home; 
+export default Home;

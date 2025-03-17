@@ -375,38 +375,15 @@ export function ESP32Guide() {
 
               <h4 className="text-md font-semibold mt-4">Database Structure</h4>
               <p>The Supabase database is organized with the following tables:</p>
-              <pre className="bg-gray-100 dark:bg-gray-800 p-3 rounded-md mt-2 overflow-x-auto text-sm">
-                <code>
-                  devices - Device information<br/>
-                  &nbsp;&nbsp;id - Device ID (MAC address)<br/>
-                  &nbsp;&nbsp;status - Online/offline status<br/>
-                  &nbsp;&nbsp;food_level - Current food level percentage<br/>
-                  &nbsp;&nbsp;last_seen - Timestamp of last connection<br/>
-                  &nbsp;&nbsp;user_id - Owner of the device<br/>
-                  <br/>
-                  feeding_schedules - Scheduled feeding times<br/>
-                  &nbsp;&nbsp;id - Schedule ID<br/>
-                  &nbsp;&nbsp;device_id - Associated device<br/>
-                  &nbsp;&nbsp;time - Time to feed<br/>
-                  &nbsp;&nbsp;amount - Amount to dispense<br/>
-                  &nbsp;&nbsp;days - Array of days (Sun-Sat)<br/>
-                  &nbsp;&nbsp;enabled - Whether schedule is active<br/>
-                  <br/>
-                  feed_commands - Manual feed commands<br/>
-                  &nbsp;&nbsp;id - Command ID<br/>
-                  &nbsp;&nbsp;device_id - Target device<br/>
-                  &nbsp;&nbsp;amount - Amount to dispense<br/>
-                  &nbsp;&nbsp;status - pending/completed/failed<br/>
-                  &nbsp;&nbsp;created_at - When command was issued<br/>
-                  <br/>
-                  feeding_history - Record of feeding events<br/>
-                  &nbsp;&nbsp;id - Event ID<br/>
-                  &nbsp;&nbsp;device_id - Associated device<br/>
-                  &nbsp;&nbsp;amount - Amount dispensed<br/>
-                  &nbsp;&nbsp;type - manual/scheduled<br/>
-                  &nbsp;&nbsp;timestamp - When feeding occurred
-                </code>
-              </pre>
+              <ul className="list-disc list-inside space-y-2 mt-4">
+                <li><span className="font-mono text-sm">devices</span> - Stores device information including status and food level</li>
+                <li><span className="font-mono text-sm">feeding_schedules</span> - Contains all scheduled feedings</li>
+                <li><span className="font-mono text-sm">feed_commands</span> - Queue for manual feed commands</li>
+                <li><span className="font-mono text-sm">feeding_history</span> - Log of all feeding events</li>
+                <li><span className="font-mono text-sm">device_registration</span> - Facilitates device registration process</li>
+              </ul>
+              
+              <p className="mt-4">Each device communicates with these tables to maintain state and provide functionality.</p>
 
               <div className="bg-blue-50 p-4 rounded-md mt-4">
                 <p className="text-sm text-blue-800">

@@ -48,24 +48,26 @@ export const registerUser = async (email: string, password: string, name: string
   // Create user profile in the database
   if (data.user) {
     const { error: profileError } = await supabase
-      .from('users')
+      .from('profiles')
       .insert([
         {
           id: data.user.id,
-          email,
-          name,
           username,
-          role: 'user',
-          permissions: {
-            canFeed: true,
-            canSchedule: true,
-            canViewStats: true
-          },
+          full_name: name,
+          email_verified: false,
           created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         },
       ]);
     
     if (profileError) throw profileError;
+
+    // Create user preferences
+    const { error: prefError } = await supabase
+      .from('user_preferences')
+      .insert([{ id: data.user.id }]);
+    
+    if (prefError) throw prefError;
   }
   
   return data.user;

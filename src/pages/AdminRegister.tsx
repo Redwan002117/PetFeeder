@@ -4,12 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { getDatabase, ref, set } from 'firebase/database';
-import { auth } from '@/lib/firebase';
+import { supabase } from '@/lib/supabase';
 import { validateAdminKey } from '@/config/adminKey';
-import { Eye, EyeOff, Shield } from 'lucide-react';
+import { Eye, EyeOff, Shield, AlertCircle } from 'lucide-react';
 
 interface LocationState {
   email: string;
@@ -18,25 +17,21 @@ interface LocationState {
   username: string;
 }
 
-interface FirebaseError {
-  code: string;
-  message: string;
-}
-
 export default function AdminRegister() {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
   const state = location.state as LocationState;
-  const db = getDatabase();
 
   const [adminKey, setAdminKey] = useState("");
   const [loading, setLoading] = useState(false);
   const [showAdminKey, setShowAdminKey] = useState(false);
+  const [error, setError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError("");
 
     try {
       // Validate admin key
@@ -52,21 +47,34 @@ export default function AdminRegister() {
         throw new Error("Registration information is missing");
       }
 
-      // Create user with email and password
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        state.email,
-        state.password
-      );
-
-      // Save additional user data to Realtime Database
-      await set(ref(db, `users/${userCredential.user.uid}`), {
+      // Register user with Supabase
+      const { data, error: signUpError } = await supabase.auth.signUp({
         email: state.email,
-        name: state.name,
-        username: state.username,
-        role: 'admin',
-        createdAt: new Date().toISOString(),
+        password: state.password,
+        options: {
+          data: {
+            full_name: state.name,
+            username: state.username,
+            is_admin: true
+          }
+        }
       });
+      
+      if (signUpError) throw signUpError;
+
+      // Create admin profile in the database
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert([{
+          id: data.user?.id,
+          username: state.username,
+          full_name: state.name,
+          email: state.email,
+          is_admin: true,
+          created_at: new Date().toISOString()
+        }]);
+      
+      if (profileError) throw profileError;
 
       toast({
         title: "Success",
@@ -75,13 +83,14 @@ export default function AdminRegister() {
 
       // Navigate to login
       navigate('/login');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Admin registration error:', error);
-      const firebaseError = error as FirebaseError;
+      setError(error.message || "Failed to create admin account");
+      
       toast({
         variant: "destructive",
         title: "Error",
-        description: firebaseError.message || "Failed to create admin account",
+        description: error.message || "Failed to create admin account",
       });
     } finally {
       setLoading(false);
@@ -111,6 +120,13 @@ export default function AdminRegister() {
           </CardHeader>
 
           <CardContent>
+            {error && (
+              <Alert variant="destructive" className="mb-6">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-4">
                 <div>
@@ -195,4 +211,4 @@ export default function AdminRegister() {
       </div>
     </div>
   );
-} 
+}

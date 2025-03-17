@@ -1,19 +1,62 @@
-C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino:110:6: error: default argument given for parameter 2 of 'void debugPrint(String, bool)' [-fpermissive]
-  110 | void debugPrint(String message, bool newLine = true) {
-      |      ^~~~~~~~~~
-C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino:106:6: note: previous specification in 'void debugPrint(String, bool)' here
-  106 | void debugPrint(String message, bool newLine = true);
-      |      ^~~~~~~~~~
-C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino:133:6: error: default argument given for parameter 2 of 'void debugBlink(int, int)' [-fpermissive]
-  133 | void debugBlink(int times, int speed = DEBUG_BLINK_DURATION) {
-      |      ^~~~~~~~~~
-C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino:107:6: note: previous specification in 'void debugBlink(int, int)' here
-  107 | void debugBlink(int times, int speed = DEBUG_BLINK_DURATION);
-      |      ^~~~~~~~~~
-C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino:599:1: error: expected declaration before '}' token
-  599 | }
+C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino: In function 'void updateDeviceStatus()':
+C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino:377:7: error: 'httpResponseCode' was not declared in this scope; did you mean 'patchResponseCode'?
+  377 |   if (httpResponseCode == 204) {
+      |       ^~~~~~~~~~~~~~~~
+      |       patchResponseCode
+C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino:374:7: warning: unused variable 'patchResponseCode' [-Wunused-variable]
+  374 |   int patchResponseCode = http.PATCH(jsonPayload);
+      |       ^~~~~~~~~~~~~~~~~
+C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino: At global scope:
+C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino:694:1: error: expected declaration before '}' token
+  694 | }
+      | ^
+C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino: In function 'void updateCommandStatus(String, String)':
+C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino:721:7: error: 'httpResponseCode' was not declared in this scope; did you mean 'patchResponseCode'?
+  721 |   if (httpResponseCode == 204) {
+      |       ^~~~~~~~~~~~~~~~
+      |       patchResponseCode
+C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino:718:7: warning: unused variable 'patchResponseCode' [-Wunused-variable]
+  718 |   int patchResponseCode = http.PATCH(jsonPayload);
+      |       ^~~~~~~~~~~~~~~~~
+C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino: At global scope:
+C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino:732:1: error: expected declaration before '}' token
+  732 | }
+      | ^
+C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino: In function 'void logFeedingEvent(int, String)':
+C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino:812:7: warning: unused variable 'postResponseCode' [-Wunused-variable]
+  812 |   int postResponseCode = http.POST(jsonPayload);
+      |       ^~~~~~~~~~~~~~~~
+C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino: At global scope:
+C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino:827:1: error: expected declaration before '}' token
+  827 | }
+      | ^
+C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino: In function 'void updateFoodLevel()':
+C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino:908:7: warning: unused variable 'patchResponseCode' [-Wunused-variable]
+  908 |   int patchResponseCode = http.PATCH(jsonPayload);
+      |       ^~~~~~~~~~~~~~~~~
+C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino: At global scope:
+C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino:925:1: error: expected declaration before '}' token
+  925 | }
+      | ^
+C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino: In function 'void updateBatteryLevel()':
+C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino:960:7: error: 'httpResponseCode' was not declared in this scope; did you mean 'patchResponseCode'?
+  960 |   if (httpResponseCode == 204) {
+      |       ^~~~~~~~~~~~~~~~
+      |       patchResponseCode
+C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino:957:7: warning: unused variable 'patchResponseCode' [-Wunused-variable]
+  957 |   int patchResponseCode = http.PATCH(jsonPayload);
+      |       ^~~~~~~~~~~~~~~~~
+C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino: At global scope:
+C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino:971:1: error: expected declaration before '}' token
+  971 | }
+      | ^
+C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino:1049:1: error: expected declaration before '}' token
+ 1049 | }
+      | ^
+C:\Users\redwa\AppData\Local\Arduino15\RemoteSketchbook\ArduinoCloud\107570251057762622855\pet_feeder_supabase\pet_feeder_supabase.ino:1081:1: error: expected declaration before '}' token
+ 1081 | }
       | ^
 
 exit status 1
 
-Compilation error: default argument given for parameter 2 of 'void debugPrint(String, bool)' [-fpermissive]
+Compilation error: 'httpResponseCode' was not declared in this scope; did you mean 'patchResponseCode'?

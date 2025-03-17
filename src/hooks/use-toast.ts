@@ -1,14 +1,15 @@
 import * as React from "react"
+import { toast as sonnerToast } from "sonner";
 
 import type {
   ToastActionElement,
-  ToastProps,
+  ToastProps as OriginalToastProps,
 } from "@/components/ui/toast"
 
 const TOAST_LIMIT = 1
 const TOAST_REMOVE_DELAY = 1000000
 
-type ToasterToast = ToastProps & {
+type ToasterToast = OriginalToastProps & {
   id: string
   title?: React.ReactNode
   description?: React.ReactNode
@@ -168,24 +169,36 @@ function toast({ ...props }: Toast) {
   }
 }
 
-function useToast() {
-  const [state, setState] = React.useState<State>(memoryState)
+/**
+ * Toast hook that uses sonner if available, otherwise provides a mock
+ */
 
-  React.useEffect(() => {
-    listeners.push(setState)
-    return () => {
-      const index = listeners.indexOf(setState)
-      if (index > -1) {
-        listeners.splice(index, 1)
-      }
-    }
-  }, [state])
-
-  return {
-    ...state,
-    toast,
-    dismiss: (toastId?: string) => dispatch({ type: "DISMISS_TOAST", toastId }),
-  }
+interface ToastProps {
+  title?: string;
+  description?: string;
+  action?: React.ReactNode;
+  variant?: "default" | "destructive" | "success";
 }
 
-export { useToast, toast }
+export function useToast() {
+  const toast = ({ title, description, action, variant = "default" }: ToastProps) => {
+    if (variant === "destructive") {
+      return sonnerToast.error(title, {
+        description,
+        action,
+      });
+    } else if (variant === "success") {
+      return sonnerToast.success(title, {
+        description,
+        action,
+      });
+    } else {
+      return sonnerToast(title, {
+        description,
+        action,
+      });
+    }
+  };
+
+  return { toast };
+}

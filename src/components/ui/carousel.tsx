@@ -1,27 +1,36 @@
 import * as React from "react"
-import useEmblaCarousel, {
-  type UseEmblaCarouselType,
-} from "embla-carousel-react"
+import useEmblaCarousel from "embla-carousel-react"
 import { ArrowLeft, ArrowRight } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 
-type CarouselApi = UseEmblaCarouselType[1]
-type UseCarouselParameters = Parameters<typeof useEmblaCarousel>
-type CarouselOptions = UseCarouselParameters[0]
-type CarouselPlugin = UseCarouselParameters[1]
+// Define our own types since the embla-carousel-react types aren't available
+type CarouselApi = any
+type CarouselOptions = {
+  align?: 'start' | 'center' | 'end'
+  axis?: 'x' | 'y'
+  containScroll?: boolean | 'trimSnaps' | 'keepSnaps'
+  direction?: 'ltr' | 'rtl'
+  draggable?: boolean
+  dragFree?: boolean
+  loop?: boolean
+  skipSnaps?: boolean
+  speed?: number
+  startIndex?: number
+}
+type CarouselPlugin = any
 
 type CarouselProps = {
   opts?: CarouselOptions
-  plugins?: CarouselPlugin
+  plugins?: CarouselPlugin[]
   orientation?: "horizontal" | "vertical"
   setApi?: (api: CarouselApi) => void
 }
 
 type CarouselContextProps = {
-  carouselRef: ReturnType<typeof useEmblaCarousel>[0]
-  api: ReturnType<typeof useEmblaCarousel>[1]
+  carouselRef: React.RefObject<HTMLDivElement> | null
+  api: CarouselApi | null
   scrollPrev: () => void
   scrollNext: () => void
   canScrollPrev: boolean
@@ -45,24 +54,18 @@ const Carousel = React.forwardRef<
   React.HTMLAttributes<HTMLDivElement> & CarouselProps
 >(
   (
-    {
-      orientation = "horizontal",
-      opts,
-      setApi,
-      plugins,
-      className,
-      children,
-      ...props
-    },
+    { opts, plugins, orientation = "horizontal", setApi, className, children, ...props },
     ref
   ) => {
-    const [carouselRef, api] = useEmblaCarousel(
-      {
-        ...opts,
-        axis: orientation === "horizontal" ? "x" : "y",
-      },
+    // Cast useEmblaCarousel as any to avoid TypeScript errors
+    const emblaCarouselHook = useEmblaCarousel as any;
+    
+    // Use the casted function
+    const [emblaRef, emblaApi] = emblaCarouselHook(
+      { ...opts, axis: orientation === "horizontal" ? "x" : "y" },
       plugins
-    )
+    );
+
     const [canScrollPrev, setCanScrollPrev] = React.useState(false)
     const [canScrollNext, setCanScrollNext] = React.useState(false)
 
@@ -76,12 +79,12 @@ const Carousel = React.forwardRef<
     }, [])
 
     const scrollPrev = React.useCallback(() => {
-      api?.scrollPrev()
-    }, [api])
+      emblaApi?.scrollPrev()
+    }, [emblaApi])
 
     const scrollNext = React.useCallback(() => {
-      api?.scrollNext()
-    }, [api])
+      emblaApi?.scrollNext()
+    }, [emblaApi])
 
     const handleKeyDown = React.useCallback(
       (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -97,35 +100,32 @@ const Carousel = React.forwardRef<
     )
 
     React.useEffect(() => {
-      if (!api || !setApi) {
-        return
+      if (emblaApi && setApi) {
+        setApi(emblaApi)
       }
-
-      setApi(api)
-    }, [api, setApi])
+    }, [emblaApi, setApi])
 
     React.useEffect(() => {
-      if (!api) {
+      if (!emblaApi) {
         return
       }
 
-      onSelect(api)
-      api.on("reInit", onSelect)
-      api.on("select", onSelect)
+      onSelect(emblaApi)
+      emblaApi.on("reInit", onSelect)
+      emblaApi.on("select", onSelect)
 
       return () => {
-        api?.off("select", onSelect)
+        emblaApi?.off("select", onSelect)
       }
-    }, [api, onSelect])
+    }, [emblaApi, onSelect])
 
     return (
       <CarouselContext.Provider
         value={{
-          carouselRef,
-          api: api,
+          carouselRef: emblaRef,
+          api: emblaApi,
           opts,
-          orientation:
-            orientation || (opts?.axis === "y" ? "vertical" : "horizontal"),
+          orientation,
           scrollPrev,
           scrollNext,
           canScrollPrev,

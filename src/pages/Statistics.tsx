@@ -2,18 +2,19 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getFeedingHistory } from "@/lib/firebase";
+import { getFeedingHistory } from "@/lib/supabase-api";
 import { format, subDays, startOfDay, endOfDay, startOfWeek, endOfWeek, 
          startOfMonth, endOfMonth, eachDayOfInterval } from "date-fns";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { AlertCircle, BarChart2, PieChartIcon, TrendingUp, BarChart } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { AlertCircle, BarChart2, PieChart, TrendingUp, BarChart } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { 
   BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line, AreaChart, Area
+  PieChart as RechartsPieChart, Pie, Cell, LineChart, Line, AreaChart, Area
 } from 'recharts';
 import PageHeader from "@/components/PageHeader";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
@@ -24,16 +25,25 @@ const Statistics = () => {
   
   useEffect(() => {
     if (currentUser) {
-      const unsubscribe = getFeedingHistory(currentUser.uid, (data) => {
+      const unsubscribe = getFeedingHistory(currentUser.id, (data) => {
         if (data) {
-          const historyArray = Object.keys(data).map(key => ({
-            id: key,
-            ...data[key],
-            timestamp: data[key].timestamp || Date.now()
-          }));
+          // If data is array, use it directly; otherwise convert from object format
+          const historyArray = Array.isArray(data) 
+            ? data 
+            : (data && typeof data === 'object')
+              ? Object.keys(data).map(key => ({
+                  id: key,
+                  ...(data[key] as object),
+                  timestamp: data[key] && typeof data[key] === 'object' && 'timestamp' in data[key] 
+                    ? (data[key] as any).timestamp 
+                    : Date.now()
+                }))
+              : [];
           
           // Sort by timestamp (most recent first)
-          const sortedHistory = historyArray.sort((a, b) => b.timestamp - a.timestamp);
+          const sortedHistory = historyArray.sort((a, b) => 
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          );
           setFeedingHistory(sortedHistory);
         } else {
           setFeedingHistory([]);
@@ -205,24 +215,30 @@ const Statistics = () => {
         
         <div className="mb-4">
           <div className="flex flex-wrap gap-2">
-            <Badge 
-              className={`cursor-pointer ${timeRange === 'day' ? 'bg-primary' : 'bg-secondary'}`}
+            <Button
+              variant="outline"
+              size="sm"
+              className={`rounded-full ${timeRange === 'day' ? 'bg-primary text-primary-foreground' : ''}`}
               onClick={() => setTimeRange('day')}
             >
               Today
-            </Badge>
-            <Badge 
-              className={`cursor-pointer ${timeRange === 'week' ? 'bg-primary' : 'bg-secondary'}`}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className={`rounded-full ${timeRange === 'week' ? 'bg-primary text-primary-foreground' : ''}`}
               onClick={() => setTimeRange('week')}
             >
               This Week
-            </Badge>
-            <Badge 
-              className={`cursor-pointer ${timeRange === 'month' ? 'bg-primary' : 'bg-secondary'}`}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className={`rounded-full ${timeRange === 'month' ? 'bg-primary text-primary-foreground' : ''}`}
               onClick={() => setTimeRange('month')}
             >
               This Month
-            </Badge>
+            </Button>
           </div>
         </div>
         
@@ -342,7 +358,7 @@ const Statistics = () => {
             <Card>
               <CardHeader>
                 <div className="flex items-center">
-                  <PieChartIcon className="mr-2 h-5 w-5 text-indigo-500" />
+                  <PieChart className="mr-2 h-5 w-5 text-indigo-500" />
                   <CardTitle>Feeding Types</CardTitle>
                 </div>
                 <CardDescription>
@@ -352,7 +368,7 @@ const Statistics = () => {
               <CardContent className="pt-4">
                 <div className="h-80 w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
+                    <RechartsPieChart>
                       <Pie
                         data={feedingTypeData}
                         cx="50%"
@@ -369,7 +385,7 @@ const Statistics = () => {
                       </Pie>
                       <Tooltip />
                       <Legend />
-                    </PieChart>
+                    </RechartsPieChart>
                   </ResponsiveContainer>
                 </div>
               </CardContent>

@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Pencil, Upload, AlertCircle, Shield, Mail, CheckCircle, User as UserIcon, Lock, AlertTriangle, Info, Loader2 } from "lucide-react";
@@ -9,15 +9,13 @@ import { useToast } from "@/components/ui/use-toast";
 import ChangePasswordForm from "@/components/ChangePasswordForm";
 import DeleteAccountForm from "@/components/DeleteAccountForm";
 import NotificationSettings from "@/components/NotificationSettings";
-import { uploadProfilePicture, database } from "@/lib/firebase";
-import { safeRef, safeUpdate, safeServerTimestamp } from "@/lib/firebase-utils";
+import { supabase } from '@/lib/supabase';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import ProfileAvatar from "@/components/ProfileAvatar";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { getCloudinaryUploadUrl, getCloudinaryUploadSignature } from '@/lib/cloudinary';
 import { Badge } from "@/components/ui/badge";
-import { updateProfile, sendEmailVerification } from "firebase/auth";
 import PageHeader from "@/components/PageHeader";
 import { sendAdminRequestEmail } from "@/services/email-service";
 import ImageCropper from "@/components/ImageCropper";
@@ -31,6 +29,21 @@ interface UserWithAdmin {
   emailVerified: boolean;
   reload: () => Promise<void>;
 }
+
+// Fix user profile interface
+interface UserProfile {
+  id: string;
+  email?: string;
+  display_name?: string;
+  avatar_url?: string;
+  photoURL?: string;  // Add this for compatibility
+}
+
+// Import proper helpers from supabase-helpers
+import { 
+  updateProfile, safeUpdate, serverTimestamp 
+} from '@/lib/supabase-helpers';
+import { uploadProfilePicture } from '@/lib/supabase-api';
 
 const Profile = () => {
   const { currentUser, isAdmin } = useAuth();
@@ -65,13 +78,8 @@ const Profile = () => {
       
       // Update the user's profile
       if (currentUser) {
-        await updateProfile(currentUser, { photoURL });
-        
-        // Update the user's profile in the database
-        const userRef = safeRef(database, `users/${currentUser.uid}`);
-        await safeUpdate(userRef, {
-          photoURL,
-          updatedAt: safeServerTimestamp()
+        await updateProfile(currentUser.id, {
+          avatar_url: photoURL  // Use avatar_url property which is defined in UserProfile
         });
         
         toast({
@@ -137,7 +145,9 @@ const Profile = () => {
     setVerificationLoading(true);
     
     try {
-      await sendEmailVerification(currentUser);
+      await supabase.auth.resetPasswordForEmail(currentUser.email!, {
+        redirectTo: `${window.location.origin}/verify-email`
+      });
       setVerificationSent(true);
       
       toast({
@@ -163,7 +173,9 @@ const Profile = () => {
     
     try {
       // Reload the user to check if email is verified
-      await currentUser.reload();
+      await supabase.auth.refreshSession();
+      const { data } = await supabase.auth.getSession();
+      // Update the user context if needed
       
       if (currentUser.emailVerified) {
         toast({
@@ -197,7 +209,7 @@ const Profile = () => {
       // Update the database to mark the request as pending using safe utilities
       const success = await safeUpdate(`users/${currentUser.uid}`, {
         adminRequestStatus: 'pending',
-        adminRequestDate: safeServerTimestamp()
+        adminRequestDate: serverTimestamp()
       });
       
       if (!success) {
@@ -207,8 +219,8 @@ const Profile = () => {
       // Send the admin request email
       const userData = {
         displayName: currentUser.displayName || 'Unknown User',
-        email: currentUser.email || 'no-email@example.com',
-        uid: currentUser.uid
+        email: currentUser.email || '',
+        uid: currentUser.id || ''  // Ensure it's not undefined
       };
       
       const emailResult = await sendAdminRequestEmail(userData, approveUrl, denyUrl);
@@ -220,7 +232,7 @@ const Profile = () => {
         });
         setAdminRequestSent(true);
       } else {
-        throw new Error(emailResult.error || "Failed to send email");
+        throw new Error(emailResult.message || "Failed to send email");
       }
     } catch (error: any) {
       console.error("Error requesting admin access:", error);

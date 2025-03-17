@@ -1,13 +1,9 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-
-interface ThemeContextType {
-  darkMode: boolean;
-  toggleDarkMode: () => void;
-}
+import { ThemeContextType } from '../types/context';
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-export const useTheme = () => {
+export const useTheme = (): ThemeContextType => {
   const context = useContext(ThemeContext);
   if (context === undefined) {
     throw new Error('useTheme must be used within a ThemeProvider');
@@ -16,64 +12,60 @@ export const useTheme = () => {
 };
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Initialize with system preference or saved preference
-  const [darkMode, setDarkMode] = useState(() => {
+  // Get initial theme from localStorage or system preference
+  const getInitialTheme = (): 'light' | 'dark' | 'system' => {
     const savedTheme = localStorage.getItem('theme');
-    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    return savedTheme === 'dark' || (!savedTheme && systemPrefersDark);
-  });
-
-  useEffect(() => {
-    // Apply dark mode class to document
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
+    if (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'system') {
+      return savedTheme;
     }
-  }, [darkMode]);
+    return 'system'; // Default to system
+  };
 
-  // Listen for system preference changes
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+  const [theme, setThemeState] = useState<'light' | 'dark' | 'system'>(getInitialTheme);
+
+  // Apply theme to document
+  const applyTheme = (newTheme: 'light' | 'dark' | 'system') => {
+    const root = window.document.documentElement;
     
-    const handleChange = (e: MediaQueryListEvent) => {
-      // Only update if user hasn't set a preference
-      if (!localStorage.getItem('theme')) {
-        setDarkMode(e.matches);
+    // Remove existing class
+    root.classList.remove('light', 'dark');
+    
+    // Apply new theme
+    if (newTheme === 'system') {
+      // Check system preference
+      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      root.classList.add(systemTheme);
+    } else {
+      root.classList.add(newTheme);
+    }
+  };
+
+  // Handle theme change
+  const setTheme = (newTheme: 'light' | 'dark' | 'system') => {
+    localStorage.setItem('theme', newTheme);
+    setThemeState(newTheme);
+    applyTheme(newTheme);
+  };
+
+  // Apply theme on mount and when theme changes
+  useEffect(() => {
+    applyTheme(theme);
+    
+    // Listen for system theme changes
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = () => {
+      if (theme === 'system') {
+        applyTheme('system');
       }
     };
     
     mediaQuery.addEventListener('change', handleChange);
-    
-    return () => {
-      mediaQuery.removeEventListener('change', handleChange);
-    };
-  }, []);
-
-  const toggleDarkMode = () => {
-    const newDarkMode = !darkMode;
-    setDarkMode(newDarkMode);
-    
-    if (newDarkMode) {
-      document.documentElement.classList.add('dark-transition');
-      setTimeout(() => {
-        document.documentElement.classList.add('dark');
-        document.documentElement.classList.remove('dark-transition');
-      }, 50);
-      localStorage.setItem('theme', 'dark');
-    } else {
-      document.documentElement.classList.add('dark-transition');
-      setTimeout(() => {
-        document.documentElement.classList.remove('dark');
-        document.documentElement.classList.remove('dark-transition');
-      }, 50);
-      localStorage.setItem('theme', 'light');
-    }
-  };
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, [theme]);
 
   return (
-    <ThemeContext.Provider value={{ darkMode, toggleDarkMode }}>
+    <ThemeContext.Provider value={{ theme, setTheme }}>
       {children}
     </ThemeContext.Provider>
   );
-}; 
+};

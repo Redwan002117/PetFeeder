@@ -19,7 +19,7 @@ import {
   getDeviceStatus, 
   triggerManualFeed,
   getFeedingHistory
-} from "@/lib/firebase";
+} from "@/lib/supabase-api";
 import { format } from "date-fns";
 
 const Dashboard = () => {
@@ -31,19 +31,24 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (currentUser) {
-      const unsubscribeSchedule = getFeedingSchedule(currentUser.uid, (data) => {
+      const unsubscribeSchedule = getFeedingSchedule(currentUser.id, (data) => {
         if (data) {
-          const scheduleArray = Object.keys(data).map(key => ({
-            id: key,
-            ...data[key]
-          }));
+          // If data is array, use it directly; otherwise convert from object format
+          const scheduleArray = Array.isArray(data) 
+            ? data 
+            : (data && typeof data === 'object') 
+              ? Object.keys(data).map(key => ({
+                  id: key,
+                  ...(data[key] as object)
+                }))
+              : [];
           setSchedule(scheduleArray);
         } else {
           setSchedule([]);
         }
       });
 
-      const unsubscribeStatus = getDeviceStatus(currentUser.uid, (data) => {
+      const unsubscribeStatus = getDeviceStatus(currentUser.id, (data) => {
         if (data) {
           setDeviceStatus(data);
         } else {
@@ -51,12 +56,15 @@ const Dashboard = () => {
         }
       });
 
-      const unsubscribeHistory = getFeedingHistory(currentUser.uid, (data) => {
+      const unsubscribeHistory = getFeedingHistory(currentUser.id, (data) => {
         if (data) {
-          const historyArray = Object.keys(data).map(key => ({
-            id: key,
-            ...data[key]
-          }));
+          // If data is array, use it directly; otherwise convert from object format
+          const historyArray = Array.isArray(data) 
+            ? data 
+            : Object.keys(data || {}).map(key => ({
+                id: key,
+                ...(data[key] as object) // Use type assertion to avoid spread error
+              }));
           setFeedingHistory(historyArray.sort((a, b) => b.timestamp - a.timestamp).slice(0, 5));
         } else {
           setFeedingHistory([]);
@@ -75,7 +83,7 @@ const Dashboard = () => {
     if (currentUser && !isFeeding) {
       setIsFeeding(true);
       try {
-        await triggerManualFeed(currentUser.uid, 20); // 20g as default amount
+        await triggerManualFeed(currentUser.id, 20); // 20g as default amount
         setTimeout(() => setIsFeeding(false), 3000); // Reset after 3 seconds
       } catch (error) {
         console.error("Error triggering manual feed:", error);

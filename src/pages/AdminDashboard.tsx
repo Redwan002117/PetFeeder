@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { getAllUsers, updateUserRole, deleteAllUsers } from "@/lib/firebase";
-import { safeUpdate } from "@/lib/firebase-utils";
+import { getAllUsers, updateUserRole } from "@/lib/supabase-api";
+import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
@@ -97,11 +97,12 @@ const AdminDashboard = () => {
 
   const handlePermissionChange = async (userId: string, permission: string, value: boolean) => {
     try {
-      const success = await safeUpdate(`users/${userId}/permissions`, {
-        [permission]: value
-      });
+      const { error } = await supabase
+        .from('users')
+        .update({ permissions: { [permission]: value } })
+        .eq('id', userId);
 
-      if (success) {
+      if (!error) {
         setUsers({
           ...users,
           [userId]: {
@@ -139,7 +140,7 @@ const AdminDashboard = () => {
     
     setPromoting(true);
     try {
-      await updateUserRole(selectedUser.id, 'admin');
+      await updateUserRole(selectedUser.id, true); // Use boolean instead of string
       
       setUsers({
         ...users,
@@ -175,7 +176,10 @@ const AdminDashboard = () => {
     
     setIsLoading(true);
     try {
-      await deleteAllUsers();
+      await supabase
+        .from('users')
+        .delete()
+        .neq('role', 'admin');
       
       const adminUsers = Object.entries(users).reduce((acc, [id, user]) => {
         if (user.role === 'admin') {

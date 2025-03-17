@@ -18,7 +18,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '18'
+          node-version: '20.17.0'  # Updated to match your local version
           cache: 'npm'
 
       - name: Install dependencies
@@ -28,7 +28,7 @@ jobs:
         run: npm run type-check
 
       - name: Lint
-        run: npm run lint
+        run: npm run lint -- --no-error-on-unmatched-pattern  # Fixed lint command
 
       - name: Build
         run: npm run build

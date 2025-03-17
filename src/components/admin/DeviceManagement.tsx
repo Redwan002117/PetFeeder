@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { database } from '@/lib/firebase';
-import { safeRef, safeGet, safeUpdate, safeOnValue, safePush, safeRemove } from '@/lib/firebase-utils';
+import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Loader2, Search, Edit, Trash2, AlertTriangle, CheckCircle, Server, Plus, RefreshCw, Download, BarChart, Battery, Zap, Bot, PlusCircle, PawPrint } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -21,22 +20,23 @@ interface Device {
   name: string;
   status: 'online' | 'offline' | 'error' | 'maintenance';
   model: string;
-  serialNumber: string;
-  firmwareVersion: string;
-  lastSeen: number;
-  userId: string;
-  foodLevel: number;
-  batteryLevel?: number;
+  serial_number: string;
+  firmware_version: string;
+  last_seen: string;
+  owner_id: string;
+  food_level: number;
+  battery_level?: number;
   location?: string;
-  lastConnected: number;
-  owner: string;
+  owner_name?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 interface DeviceStats {
-  feedingsToday: number;
-  totalFeedings: number;
-  averageFoodPerDay: number;
-  lastMaintenanceDate?: number;
+  feedings_today: number;
+  total_feedings: number;
+  average_food_per_day: number;
+  last_maintenance_date?: string;
   uptime: number;
 }
 
@@ -56,92 +56,102 @@ export const DeviceManagement: React.FC = () => {
   const [newDeviceSerial, setNewDeviceSerial] = useState('');
   const [newDeviceLocation, setNewDeviceLocation] = useState('');
   const [newDeviceOwner, setNewDeviceOwner] = useState('');
-  const [newDeviceOwnerName, setNewDeviceOwnerName] = useState('');
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
   const [deviceStats, setDeviceStats] = useState<DeviceStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [maintenanceDialogOpen, setMaintenanceDialogOpen] = useState(false);
   const [maintenanceNotes, setMaintenanceNotes] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const devicesRef = useRef<any>(null);
   const { toast } = useToast();
-  const [deleteDeviceId, setDeleteDeviceId] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
 
   useEffect(() => {
     fetchDevices();
+
+    // Set up real-time subscription
+    const channel = supabase
+      .channel('public:devices')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'devices'
+      }, (payload: any) => {  // Add typing to the parameter
+        fetchDevices();
+      })
+      .subscribe();
+
     return () => {
-      // Clean up any listeners
-      const devicesRef = safeRef('devices');
-      if (devicesRef) {
-        // No need to call off directly, we'll use the cleanup function from safeOnValue
-      }
+      channel.unsubscribe();
     };
   }, []);
 
   const fetchDevices = async () => {
     try {
       setLoading(true);
-      const devicesRef = safeRef('devices');
       
-      if (!devicesRef) {
-        setLoading(false);
-        setDevices([]);
-        return;
-      }
-
-      // Use safeOnValue instead of onValue
-      const unsubscribe = safeOnValue(
-        'devices',
-        (snapshot) => {
-          if (snapshot.exists()) {
-            const devicesData = snapshot.val();
-            const devicesArray = Object.keys(devicesData).map(key => ({
-              id: key,
-              ...devicesData[key]
-            }));
-            setDevices(devicesArray);
-          } else {
-            setDevices([]);
-          }
-          setLoading(false);
-        },
-        (error) => {
-          console.error("Error fetching devices:", error);
-          setLoading(false);
-          setDevices([]);
-        }
-      );
-
-      // Return the unsubscribe function for cleanup
-      return unsubscribe;
+      const { data, error } = await supabase
+        .from('devices')
+        .select(`
+          *,
+          profiles(display_name)
+        `);
+      
+      if (error) throw error;
+      
+      // Map the data to our device interface
+      const formattedDevices: Device[] = (data || []).map((device: any) => ({
+        id: device.id,
+        name: device.name || `Device ${device.id.substring(0, 6)}`,
+        status: device.status || 'offline',
+        model: device.model || 'Unknown',
+        serial_number: device.serial_number || '',
+        firmware_version: device.firmware_version || '1.0.0',
+        last_seen: device.last_seen || new Date().toISOString(),
+        owner_id: device.owner_id || '',
+        food_level: device.food_level || 0,
+        battery_level: device.battery_level || 100,
+        location: device.location || '',
+        owner_name: device.profiles?.display_name || 'Unknown'
+      }));
+      
+      setDevices(formattedDevices);
     } catch (error) {
       console.error("Error fetching devices:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load devices. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
       setLoading(false);
-      setDevices([]);
     }
   };
 
   const fetchDeviceStats = async (deviceId: string) => {
     setStatsLoading(true);
     try {
-      // Fetch device stats from Firebase
-      const statsRef = safeRef(`deviceStats/${deviceId}`);
-      const statsSnapshot = await safeGet(statsRef);
+      // Fetch device stats from Supabase
+      const { data, error } = await supabase
+        .from('device_stats')
+        .select('*')
+        .eq('device_id', deviceId)
+        .single();
       
-      if (!statsSnapshot.exists()) {
+      if (error) throw error;
+      
+      if (!data) {
         // Create default stats if none exist
         const defaultStats: DeviceStats = {
-          feedingsToday: 0,
-          totalFeedings: 0,
-          averageFoodPerDay: 0,
+          feedings_today: 0,
+          total_feedings: 0,
+          average_food_per_day: 0,
           uptime: 0
         };
         setDeviceStats(defaultStats);
       } else {
-        setDeviceStats(statsSnapshot.val());
+        setDeviceStats(data);
       }
     } catch (error) {
       console.error('Error fetching device stats:', error);
@@ -177,25 +187,21 @@ export const DeviceManagement: React.FC = () => {
         name: deviceName,
         status: deviceStatus,
         location: deviceLocation,
-        lastUpdated: Date.now()
+        updated_at: new Date().toISOString()
       };
       
-      // Use safeUpdate instead of update
-      const success = await safeUpdate(`devices/${editingDevice.id}`, updates);
+      const { error } = await supabase
+        .from('devices')
+        .update(updates)
+        .eq('id', editingDevice.id);
       
-      if (success) {
-        toast({
-          title: "Device Updated",
-          description: `Device ${deviceName} has been updated successfully.`,
-        });
-        setEditingDevice(null);
-      } else {
-        toast({
-          title: "Update Failed",
-          description: "Failed to update device. Please try again.",
-          variant: "destructive"
-        });
-      }
+      if (error) throw error;
+      
+      toast({
+        title: "Device Updated",
+        description: `Device ${deviceName} has been updated successfully.`,
+      });
+      setEditingDevice(null);
     } catch (error) {
       console.error("Error updating device:", error);
       toast({
@@ -217,22 +223,18 @@ export const DeviceManagement: React.FC = () => {
     try {
       setIsDeleting(true);
       
-      // Use safeRemove instead of remove
-      const success = await safeRemove(`devices/${deviceId}`);
+      const { error } = await supabase
+        .from('devices')
+        .delete()
+        .eq('id', deviceId);
       
-      if (success) {
-        toast({
-          title: "Device Deleted",
-          description: "The device has been deleted successfully.",
-        });
-        setDeleteDialogOpen(false);
-      } else {
-        toast({
-          title: "Deletion Failed",
-          description: "Failed to delete device. Please try again.",
-          variant: "destructive"
-        });
-      }
+      if (error) throw error;
+      
+      toast({
+        title: "Device Deleted",
+        description: "The device has been deleted successfully.",
+      });
+      setDeleteDialogOpen(false);
     } catch (error) {
       console.error("Error deleting device:", error);
       toast({
@@ -252,41 +254,34 @@ export const DeviceManagement: React.FC = () => {
       const newDevice = {
         name: newDeviceName,
         model: newDeviceModel,
-        serialNumber: newDeviceSerial,
+        serial_number: newDeviceSerial,
         status: 'offline',
-        firmwareVersion: '1.0.0',
-        lastSeen: Date.now(),
-        userId: newDeviceOwner,
-        foodLevel: 100,
-        batteryLevel: 100,
+        firmware_version: '1.0.0',
+        last_seen: new Date().toISOString(),
+        owner_id: newDeviceOwner,
+        food_level: 100,
+        battery_level: 100,
         location: newDeviceLocation,
-        lastConnected: Date.now(),
-        owner: newDeviceOwnerName,
-        createdAt: Date.now()
+        created_at: new Date().toISOString()
       };
       
-      // Use safePush instead of push and set
-      const deviceId = await safePush('devices', newDevice);
+      const { data, error } = await supabase
+        .from('devices')
+        .insert(newDevice)
+        .single();
       
-      if (deviceId) {
-        toast({
-          title: "Device Added",
-          description: `Device ${newDeviceName} has been added successfully.`,
-        });
-        setNewDeviceName('');
-        setNewDeviceModel('');
-        setNewDeviceSerial('');
-        setNewDeviceLocation('');
-        setNewDeviceOwner('');
-        setNewDeviceOwnerName('');
-        setAddDeviceDialogOpen(false);
-      } else {
-        toast({
-          title: "Add Failed",
-          description: "Failed to add device. Please try again.",
-          variant: "destructive"
-        });
-      }
+      if (error) throw error;
+      
+      toast({
+        title: "Device Added",
+        description: `Device ${newDeviceName} has been added successfully.`,
+      });
+      setNewDeviceName('');
+      setNewDeviceModel('');
+      setNewDeviceSerial('');
+      setNewDeviceLocation('');
+      setNewDeviceOwner('');
+      setAddDeviceDialogOpen(false);
     } catch (error) {
       console.error("Error adding device:", error);
       toast({
@@ -304,16 +299,24 @@ export const DeviceManagement: React.FC = () => {
     
     try {
       // Update device status and add maintenance record
-      await safeUpdate(`devices/${selectedDevice.id}`, {
-        status: 'maintenance'
-      });
+      const { error: updateError } = await supabase
+        .from('devices')
+        .update({ status: 'maintenance' })
+        .eq('id', selectedDevice.id);
+      
+      if (updateError) throw updateError;
       
       // Add maintenance record
-      const maintenanceId = await safePush(`maintenance/${selectedDevice.id}`, {
-        date: Date.now(),
-        notes: maintenanceNotes,
-        status: 'scheduled'
-      });
+      const { error: insertError } = await supabase
+        .from('maintenance')
+        .insert({
+          device_id: selectedDevice.id,
+          date: new Date().toISOString(),
+          notes: maintenanceNotes,
+          status: 'scheduled'
+        });
+      
+      if (insertError) throw insertError;
       
       toast({
         title: "Maintenance Scheduled",
@@ -364,7 +367,7 @@ export const DeviceManagement: React.FC = () => {
     const matchesSearch = (
       device.name.toLowerCase().includes(searchTermLower) ||
       device.model.toLowerCase().includes(searchTermLower) ||
-      device.serialNumber.toLowerCase().includes(searchTermLower) ||
+      device.serial_number.toLowerCase().includes(searchTermLower) ||
       (device.location && device.location.toLowerCase().includes(searchTermLower))
     );
     
@@ -391,7 +394,7 @@ export const DeviceManagement: React.FC = () => {
     }
   };
 
-  const formatLastSeen = (timestamp: number) => {
+  const formatLastSeen = (timestamp: string) => {
     if (!timestamp) return 'Never';
     
     const date = new Date(timestamp);
@@ -400,11 +403,13 @@ export const DeviceManagement: React.FC = () => {
 
   const handleStatusChange = async (deviceId: string, newStatus: 'online' | 'offline' | 'maintenance') => {
     try {
-      // Update the status in Firebase
-      const deviceRef = safeRef(`devices/${deviceId}`);
-      await safeUpdate(deviceRef, {
-        status: newStatus
-      });
+      // Update the status in Supabase
+      const { error } = await supabase
+        .from('devices')
+        .update({ status: newStatus })
+        .eq('id', deviceId);
+      
+      if (error) throw error;
       
       // Update local state
       setDevices(devices.map(device => {
@@ -520,15 +525,15 @@ export const DeviceManagement: React.FC = () => {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-500">Serial Number</p>
-                  <p>{selectedDevice.serialNumber}</p>
+                  <p>{selectedDevice.serial_number}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-500">Firmware Version</p>
-                  <p>{selectedDevice.firmwareVersion}</p>
+                  <p>{selectedDevice.firmware_version}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-500">Last Seen</p>
-                  <p>{formatLastSeen(selectedDevice.lastSeen)}</p>
+                  <p>{formatLastSeen(selectedDevice.last_seen)}</p>
                     </div>
                 <div>
                   <p className="text-sm font-medium text-gray-500">Location</p>
@@ -545,20 +550,20 @@ export const DeviceManagement: React.FC = () => {
                 <div>
                   <div className="flex justify-between items-center mb-2">
                     <p className="text-sm font-medium">Food Level</p>
-                    <p className="text-sm font-medium">{selectedDevice.foodLevel}%</p>
+                    <p className="text-sm font-medium">{selectedDevice.food_level}%</p>
                   </div>
-                  <Progress value={selectedDevice.foodLevel} className="h-2" />
+                  <Progress value={selectedDevice.food_level} className="h-2" />
                   </div>
                 
-                {selectedDevice.batteryLevel !== undefined && (
+                {selectedDevice.battery_level !== undefined && (
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <p className="text-sm font-medium">Battery Level</p>
-                      <p className="text-sm font-medium">{selectedDevice.batteryLevel}%</p>
+                      <p className="text-sm font-medium">{selectedDevice.battery_level}%</p>
                     </div>
                     <Progress 
-                      value={selectedDevice.batteryLevel} 
-                      className={`h-2 ${selectedDevice.batteryLevel < 20 ? 'bg-red-200' : ''}`}
+                      value={selectedDevice.battery_level} 
+                      className={`h-2 ${selectedDevice.battery_level < 20 ? 'bg-red-200' : ''}`}
                     />
                   </div>
                 )}
@@ -598,20 +603,20 @@ export const DeviceManagement: React.FC = () => {
                   <div className="space-y-4">
                     <div>
                       <p className="text-sm font-medium text-gray-500">Feedings Today</p>
-                      <p className="text-2xl font-bold">{deviceStats.feedingsToday}</p>
+                      <p className="text-2xl font-bold">{deviceStats.feedings_today}</p>
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-500">Total Feedings</p>
-                      <p className="text-2xl font-bold">{deviceStats.totalFeedings}</p>
+                      <p className="text-2xl font-bold">{deviceStats.total_feedings}</p>
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-500">Avg. Food Per Day</p>
-                      <p className="text-2xl font-bold">{deviceStats.averageFoodPerDay.toFixed(1)} g</p>
+                      <p className="text-2xl font-bold">{deviceStats.average_food_per_day.toFixed(1)} g</p>
                     </div>
-                    {deviceStats.lastMaintenanceDate && (
+                    {deviceStats.last_maintenance_date && (
                       <div>
                         <p className="text-sm font-medium text-gray-500">Last Maintenance</p>
-                        <p>{formatLastSeen(deviceStats.lastMaintenanceDate)}</p>
+                        <p>{formatLastSeen(deviceStats.last_maintenance_date)}</p>
                       </div>
                     )}
                     <div>
@@ -663,15 +668,15 @@ export const DeviceManagement: React.FC = () => {
                         <TableCell className="font-medium">{device.name}</TableCell>
                         <TableCell>{getStatusBadge(device.status)}</TableCell>
                         <TableCell>{device.model}</TableCell>
-                        <TableCell>{device.serialNumber}</TableCell>
-                        <TableCell>{device.firmwareVersion}</TableCell>
+                        <TableCell>{device.serial_number}</TableCell>
+                        <TableCell>{device.firmware_version}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <Progress value={device.foodLevel} className="h-2 w-16" />
-                            <span className="text-xs">{device.foodLevel}%</span>
+                            <Progress value={device.food_level} className="h-2 w-16" />
+                            <span className="text-xs">{device.food_level}%</span>
                           </div>
                         </TableCell>
-                        <TableCell>{formatLastSeen(device.lastSeen)}</TableCell>
+                        <TableCell>{formatLastSeen(device.last_seen)}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleEditDevice(device); }}>
@@ -858,4 +863,4 @@ export const DeviceManagement: React.FC = () => {
       </Dialog>
     </div>
   );
-}; 
+};

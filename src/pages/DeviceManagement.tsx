@@ -2,10 +2,10 @@ import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DeviceWiFiConfig } from '@/components/DeviceWiFiConfig';
-import { useDevice } from '@/contexts/DeviceContext';
+import { useDevices } from '@/contexts/DeviceContext';
 
 const DeviceManagement = () => {
-  const { device, loading } = useDevice();
+  const { device, loading } = useDevices();
 
   if (loading) {
     return (
@@ -50,11 +50,11 @@ const DeviceManagement = () => {
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="font-medium">Food Level:</span>
-                  <span>{device.foodLevel}%</span>
+                  <span>{device.food_level}%</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="font-medium">Last Seen:</span>
-                  <span>{new Date(device.lastSeen * 1000).toLocaleString()}</span>
+                  <span>{new Date(device.last_seen ? new Date(device.last_seen).getTime() : 0).toLocaleString()}</span>
                 </div>
               </div>
             </CardContent>
@@ -95,4 +95,4 @@ const DeviceManagement = () => {
   );
 }
 
-export default DeviceManagement; 
+export default DeviceManagement;

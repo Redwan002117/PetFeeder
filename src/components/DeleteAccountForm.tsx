@@ -1,14 +1,14 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
-import { deleteUserAccount } from "@/lib/firebase";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Trash2 } from "lucide-react";
+import { Trash2, Loader2 } from "lucide-react";
 
 const DeleteAccountForm = () => {
   const { currentUser } = useAuth();
@@ -23,11 +23,38 @@ const DeleteAccountForm = () => {
     
     setLoading(true);
     try {
-      await deleteUserAccount(currentUser, password);
+      // First reauthenticate with password
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: currentUser.email!,
+        password: password
+      });
+      
+      if (authError) {
+        throw new Error("Password is incorrect");
+      }
+      
+      // Delete user data and profile
+      const userId = currentUser.id;
+      
+      // First delete related data (schedules, etc.)
+      await supabase.from('feeding_schedules').delete().eq('created_by', userId);
+      await supabase.from('device_settings').delete().eq('created_by', userId);
+      
+      // Then delete the profile
+      await supabase.from('profiles').delete().eq('id', userId);
+      
+      // Finally delete the user account
+      const { error } = await supabase.auth.admin.deleteUser(userId);
+      if (error) throw error;
+      
+      // Log the user out
+      await supabase.auth.signOut();
+      
       toast({
         title: "Account Deleted",
         description: "Your account has been permanently deleted.",
       });
+      
       navigate("/login");
     } catch (error: any) {
       toast({
@@ -90,7 +117,12 @@ const DeleteAccountForm = () => {
                 disabled={loading || !password}
                 className="bg-destructive hover:bg-destructive/90"
               >
-                {loading ? "Deleting..." : "Delete Account"}
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Deleting...
+                  </>
+                ) : "Delete Account"}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -100,4 +132,4 @@ const DeleteAccountForm = () => {
   );
 };
 
-export default DeleteAccountForm; 
+export default DeleteAccountForm;

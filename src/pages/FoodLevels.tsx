@@ -4,10 +4,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, RefreshCw, Loader2 } from "lucide-react";
-import { getDevices } from "@/lib/firebase";
-import { safeGet } from "@/lib/firebase-utils";
+import { getDevices } from "@/lib/supabase-api";
 import { useToast } from "@/hooks/use-toast";
 import PageHeader from "@/components/PageHeader";
+import { supabase } from '@/lib/supabase';
 
 interface Device {
   id: string;
@@ -28,49 +28,20 @@ const FoodLevels = () => {
 
     setLoading(true);
     try {
-      // Use safeGet to fetch devices
-      const userDevicesSnapshot = await safeGet(`users/${currentUser.uid}/devices`);
+      const { data: userDevices } = await supabase
+        .from('devices')
+        .select('*')
+        .eq('owner_id', currentUser.id);
       
-      if (userDevicesSnapshot && userDevicesSnapshot.exists()) {
-        const userDevicesData = userDevicesSnapshot.val();
+      if (userDevices && userDevices.length > 0) {
+        const validDevices = userDevices.map(device => ({
+          id: device.id,
+          name: device.name || `Device ${device.id.substring(0, 6)}`,
+          foodLevel: device.foodLevel || 0,
+          lastUpdated: device.lastSeen || Date.now()
+        }));
         
-        // Fetch detailed device info for each device
-        const devicePromises = Object.keys(userDevicesData).map(async (deviceId) => {
-          const deviceSnapshot = await safeGet(`devices/${deviceId}`);
-          if (deviceSnapshot && deviceSnapshot.exists()) {
-            const deviceData = deviceSnapshot.val();
-            return {
-              id: deviceId,
-              name: deviceData.name || `Device ${deviceId.substring(0, 6)}`,
-              foodLevel: deviceData.foodLevel || 0,
-              lastUpdated: deviceData.lastSeen || Date.now()
-            };
-          }
-          return null;
-        });
-        
-        const deviceResults = await Promise.all(devicePromises);
-        const validDevices = deviceResults.filter(device => device !== null) as Device[];
-        
-        if (validDevices.length > 0) {
-          setDevices(validDevices);
-        } else {
-          // If no valid devices found, use mock data
-          setDevices([
-            {
-              id: 'mock-device-1',
-              name: 'Pet Feeder 1',
-              foodLevel: 75,
-              lastUpdated: Date.now() - 3600000 // 1 hour ago
-            },
-            {
-              id: 'mock-device-2',
-              name: 'Pet Feeder 2',
-              foodLevel: 25,
-              lastUpdated: Date.now() - 86400000 // 1 day ago
-            }
-          ]);
-        }
+        setDevices(validDevices);
       } else {
         // If no devices found, use mock data
         setDevices([
@@ -243,4 +214,4 @@ const FoodLevels = () => {
   );
 };
 
-export default FoodLevels; 
+export default FoodLevels;
