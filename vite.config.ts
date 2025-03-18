@@ -54,24 +54,12 @@ export default defineConfig(({ mode }) => ({
   build: {
     outDir: 'dist',
     sourcemap: true,
-    minify: 'terser',
-    terserOptions: {
-      compress: {
-        drop_console: mode === 'production',
-        drop_debugger: mode === 'production',
-      },
-      mangle: true,
-      format: {
-        comments: false,
-      },
-    },
+    minify: 'esbuild', // Changed from 'terser' to 'esbuild'
     rollupOptions: {
       output: {
         manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          react: ['react', 'react-dom'],
-          router: ['react-router-dom'],
-          ui: [
+          'vendor': ['react', 'react-dom', 'react-router-dom'],
+          'ui': [
             '@radix-ui/react-accordion',
             '@radix-ui/react-alert-dialog',
             '@radix-ui/react-avatar',

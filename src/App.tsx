@@ -1,29 +1,38 @@
-import { BrowserRouter as Router } from "react-router-dom";
-import AppRoutes from "./router";
-import { AuthProvider } from "./contexts/AuthContext";
-import { ThemeProvider } from "./contexts/ThemeContext";
-import { Toaster } from "./components/ui/toaster";
-import { DeviceProvider } from "./contexts/DeviceContext";
-import ErrorBoundary from "./components/ErrorBoundary";
-import { useEffect, useState } from "react";
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { useAuth } from './contexts/AuthContext';
+import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
+import HomePage from './pages/HomePage';
+import FeedingSchedulePage from './pages/FeedingSchedulePage';
+import SettingsPage from './pages/SettingsPage';
+import ProfilePage from './pages/ProfilePage';
+import Layout from './components/Layout';
 
-function App() {
+const App: React.FC = () => {
+  const { user } = useAuth();
+
   return (
-    <ErrorBoundary>
-      <ThemeProvider>
-        <Router>
-          <AuthProvider>
-            <DeviceProvider>
-              <div className="min-h-screen bg-background">
-                <AppRoutes />
-                <Toaster />
-              </div>
-            </DeviceProvider>
-          </AuthProvider>
-        </Router>
-      </ThemeProvider>
-    </ErrorBoundary>
+    <Router>
+      <Routes>
+        {!user ? (
+          <>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </>
+        ) : (
+          <Route element={<Layout />}>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/feeding-schedule" element={<FeedingSchedulePage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
+        )}
+      </Routes>
+    </Router>
   );
-}
+};
 
 export default App;

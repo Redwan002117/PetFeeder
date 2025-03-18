@@ -1,3 +1,5 @@
+@import './styles/globals.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -66,8 +68,6 @@ body {
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
-
-    --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
     --ring: 243 75% 59%;
 
@@ -397,3 +397,5 @@ body {
   color: rgba(255, 255, 255, 0.87);
   background-color: #242424;
 }
+
+/* Add your custom styles below */

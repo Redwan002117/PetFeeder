@@ -6,6 +6,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#000000" />
     <meta name="description" content="PetFeeder - Smart pet feeding solution - Control your pet feeder remotely" />
+    <!-- Supabase initialization -->
+    <script>
+      // Initialize Supabase client
+      document.addEventListener('DOMContentLoaded', function() {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        
+        if (supabaseUrl && supabaseAnonKey) {
+          console.log('Supabase client initialized with environment variables');
+        } else {
+          console.warn('Supabase environment variables not found');
+        }
+      });
+    </script>
     <title>PetFeeder</title>
     <script>
       // Initialize dark mode before app loads to prevent flickering
@@ -34,6 +48,13 @@
       // Single Page Apps for GitHub Pages
       // MIT License
       // https://github.com/rafgraph/spa-github-pages
+      // This script checks to see if a redirect is present in the query string,
+      // converts it back into the correct url and adds it to the
+      // browser's history using window.history.replaceState(...),
+      // which won't cause the browser to attempt to load the new url.
+      // When the single page app is loaded further down in this file,
+      // the correct url will be waiting in the browser's history for
+      // the single page app to route accordingly.
       (function(l) {
         if (l.search[1] === '/' ) {
           var decoded = l.search.slice(1).split('&').map(function(s) { 
@@ -46,9 +67,24 @@
       }(window.location))
     </script>
     <!-- End Single Page Apps for GitHub Pages -->
-    <script type="module" crossorigin src="/assets/index-C-gFcAYI.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-DIFozWi4.css">
-  </head>
+    <script type="module" crossorigin src="/assets/index-BM9UxYmO.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/vendor-DloVpBp7.js">
+    <link rel="modulepreload" crossorigin href="/assets/ui-D-lPrPlj.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-Bs8sSeR_.css">
+  <script>
+          // Initialize Supabase client
+          document.addEventListener('DOMContentLoaded', function() {
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+            
+            if (supabaseUrl && supabaseAnonKey) {
+              console.log('Supabase client initialized with environment variables');
+            } else {
+              console.warn('Supabase environment variables not found');
+            }
+          });
+        </script>
+        </head>
   <body>
     <div id="root"></div>
   </body>

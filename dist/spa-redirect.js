@@ -21,10 +21,6 @@
       !path.endsWith('/')) {
     
     // Add trailing slash to prevent 404s
-    const sanitizedPath = encodeURIComponent(path);
-    const sanitizedSearch = encodeURIComponent(window.location.search);
-    const sanitizedHash = encodeURIComponent(window.location.hash);
-    window.location.replace(sanitizedPath + '/' + sanitizedSearch + sanitizedHash);
+    window.location.replace(path + '/' + window.location.search + window.location.hash);
   }
-
 })(); 
