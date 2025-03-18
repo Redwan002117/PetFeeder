@@ -16,7 +16,7 @@ PetFeeder Hub is a web application for remotely controlling and monitoring your 
 ## Tech Stack
 
 - React with TypeScript
-- Firebase (Authentication, Realtime Database, Storage)
+- Supabase (Authentication, Realtime Database, Storage)
 - Supabase integration
 - Tailwind CSS with shadcn/ui components
 - Vite for build tooling
@@ -28,7 +28,7 @@ PetFeeder Hub is a web application for remotely controlling and monitoring your 
 
 - Node.js (v16+)
 - npm or yarn
-- Firebase project (for authentication and database)
+- Supabase project (for authentication and database)
 
 ### Installation
 
@@ -45,7 +45,7 @@ PetFeeder Hub is a web application for remotely controlling and monitoring your 
    yarn
    ```
 
-3. Create a `.env` file in the root directory with your Firebase and Supabase configuration:
+3. Create a `.env` file in the root directory with your Supabase configuration:
    ```
    VITE_SUPABASE_URL=your-supabase-url
    VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
@@ -110,4 +110,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## Contact
 
-For questions or support, please open an issue or contact the project maintainers.
+For support, email support@petfeeder.com or join our Slack channel.
